@@ -70,3 +70,14 @@ Lab Switch lets a developer run the same prompt in two isolated Claude Code sess
 3. The preview proxies SHALL accept only addresses that already signed in with the token.
 4. The system SHALL pass the host Claude login token only to the Claude processes, never to files or the browser.
 5. The system SHALL pass the host git configuration and credentials to both sides.
+
+## Requirement 7: Run modes (Code Mode, demo, model)
+
+**User story:** As a developer, I want to compare native Code Mode on both sides, and try the lab without a Claude login.
+
+### Acceptance criteria
+
+1. WHEN `--code-mode` is set THEN the system SHALL request native Code Mode on both lanes.
+2. WHEN `--demo` is set THEN the system SHALL run the interface with demo processes instead of real Claude sessions.
+3. WHEN running in demo mode THEN the system SHALL label the page as demo mode.
+4. WHEN `--model` is set THEN the system SHALL apply the same model choice to both lanes.
