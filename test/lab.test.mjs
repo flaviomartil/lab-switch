@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WebSocket } from 'ws'
 import { claudeAuthEnvironment, currentOAuthToken } from '../lib/auth.mjs'
+import { configuration } from '../lib/config.mjs'
 
 test('reusa apenas o token válido e aceita a credencial fornecida explicitamente', t => {
   const folder = mkdtempSync(join(tmpdir(), 'lab-auth-test-'))
@@ -18,6 +19,17 @@ test('reusa apenas o token válido e aceita a credencial fornecida explicitament
   assert.deepEqual(claudeAuthEnvironment({ CLAUDE_CONFIG_DIR: folder, ANTHROPIC_API_KEY: 'explicit-fixture' }), { ANTHROPIC_API_KEY: 'explicit-fixture' })
   assert.equal(currentOAuthToken(JSON.stringify({ claudeAiOauth: oauth }), oauth.expiresAt), null)
   assert.equal(currentOAuthToken('not json'), null)
+})
+
+test('os dois processos Claude recebem bypass de permissões', t => {
+  const staging = mkdtempSync(join(tmpdir(), 'lab-permissions-test-'))
+  t.after(() => rmSync(staging, { recursive: true, force: true }))
+  const config = configuration(['--claude-bin', process.execPath], process.cwd(), staging)
+  for (const lane of ['with', 'without']) {
+    const { args } = config.createLane(lane, join(staging, lane))
+    assert.ok(args.includes('--dangerously-skip-permissions'))
+    assert.ok(!args.includes('--permission-mode'))
+  }
 })
 
 test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 15_000 }, async t => {
@@ -51,6 +63,10 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   const ready = () => state()?.lanes.with.status === 'ready' && state().lanes.without.status === 'ready'
   const output = lane => events.filter(e => e.type === 'data' && e.lane === lane).map(e => e.data).join('')
   await waitFor(ready)
+  socket.send(JSON.stringify({ type: 'input', lane: 'with', data: '\x1b[I' }))
+  socket.send(JSON.stringify({ type: 'input', lane: 'with', data: '\x1b[O' }))
+  socket.send(JSON.stringify({ type: 'input', lane: 'without', data: '\x1b[I' }))
+  socket.send(JSON.stringify({ type: 'input', lane: 'without', data: '\x1b[O' }))
   socket.send(JSON.stringify({ type: 'send', text: 'Primeira linha\nSegunda linha' }))
   await waitFor(() => events.some(e => e.type === 'sent'))
   await waitFor(() => output('with').includes('Entrada recebida') && output('without').includes('Entrada recebida'))

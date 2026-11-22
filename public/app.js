@@ -10,7 +10,7 @@ const sample = 'No arquivo rotina.tsv, conte as tarefas marcadas como feito e di
 
 const labels = {
   starting: 'Iniciando', setup: 'Configuração', approval: 'Aguardando confirmação',
-  ready: 'Pronto', running: 'Em execução', stopping: 'Encerrando', stopped: 'Encerrado', error: 'Erro',
+  ready: 'Pronto', draft: 'Rascunho', running: 'Em execução', stopping: 'Encerrando', stopped: 'Encerrado', error: 'Erro',
 }
 const sessions = new Map()
 let socket
@@ -83,8 +83,9 @@ function update() {
       : pending || state.sending ? 'Enviando a mesma entrada para os dois.'
       : current.includes('setup') ? 'Conclua a configuração ou o login em cada terminal.'
       : current.includes('approval') ? 'Responda à confirmação no terminal que a solicitou.'
+      : current.includes('draft') ? 'Envie ou limpe o rascunho do terminal antes de usar o prompt compartilhado.'
       : stopped ? 'Inicie um novo par para continuar.'
-      : ready ? 'Os dois terminais estão prontos. Use Ctrl ou ⌘ + Enter para enviar.'
+      : ready ? 'Envie pelo campo compartilhado ou use Ctrl ou ⌘ + Enter.'
       : 'O envio fica disponível quando os dois terminais estiverem no campo de prompt.'
   )
 }
@@ -103,7 +104,8 @@ function connect() {
     if (message.type === 'meta') {
       element('with-heading').textContent = 'Com ' + message.item
       element('without-heading').textContent = 'Sem ' + message.item
-      element('item-summary').textContent = (message.demo ? 'Demonstração de PTY · ' : 'Item testado · ') + message.item
+      element('item-summary').textContent = (message.demo ? 'Demonstração de PTY · ' : 'Item testado · ') +
+        message.item + (message.bypassPermissions ? ' · Bypass de permissões' : '')
       element('project-summary').textContent = message.project + (message.model ? ' · ' + message.model : '')
       element('subtitle').textContent = message.demo
         ? 'Demonstração local dos terminais. O exemplo roda sem consulta ao Claude.'

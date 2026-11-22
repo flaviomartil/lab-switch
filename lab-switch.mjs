@@ -70,17 +70,39 @@ function status() {
 
 function inspect(lane) {
   const buffer = lane.screen.buffer.active
-  const cursor = buffer.baseY + buffer.cursorY
   const view = Array.from({ length: lane.screen.rows }, (_, i) =>
     buffer.getLine(buffer.baseY + i)?.translateToString(true) ?? '')
   const scope = view.filter(line => line.trim()).slice(-14).join('\n')
-  const line = buffer.getLine(cursor)?.translateToString(true) ?? ''
-  const prompt = line.match(/^\s*([❯›])(?:\s*$|\s+(?:Try\b|Ask\b|Describe\b|What\b))/)
-  if (/Do you (?:want|trust)|(?:Allow|Approve) this|permission (?:prompt|required)|Yes,\s+(?:allow|proceed|I trust)|Esc to cancel/i.test(scope)) return 'approval'
+  const line = view[buffer.cursorY] ?? ''
+  const prompt = line.match(/^\s*([❯›])(?:\s|$)/)
+  if (/Do you (?:want|trust)|(?:Allow|Approve) this|permission (?:prompt|required)|Yes,\s+(?:allow|proceed|I trust)|Esc to cancel|Bypass Permissions mode.*(?:warning|risk|danger)|Yes, I accept/i.test(scope)) return 'approval'
   if (/Select (?:a |the )?login method|Log in to Claude|Copy this URL|Security notes|Press Enter to continue|Choose the text style|theme.*(?:dark|light)|Use Claude Code with your/i.test(scope)) return 'setup'
   if (/\b(?:Thinking|Working|Pondering|Baking|Brewing|Cooking|Running)\b.*(?:esc to interrupt|…|\.\.\.)|esc to interrupt/i.test(scope)) return 'running'
-  if (prompt && buffer.cursorX <= line.indexOf(prompt[1]) + 2) return 'ready'
+  if (prompt) {
+    const text = line.slice(line.indexOf(prompt[1]) + 1).trim()
+    if (!text || (buffer.cursorX <= line.indexOf(prompt[1]) + 2 && /^(?:Try|Ask|Describe|What)\b/.test(text))) return 'ready'
+    if (/^\s*[─━]{5,}\s*$/.test(view[buffer.cursorY - 1] ?? '')) return 'draft'
+  }
+  const lastFrame = view.findLastIndex(row => /^\s*[─━]{5,}\s*$/.test(row))
+  if (lastFrame >= 2 && /^\s*[❯›]\s*$/.test(view[lastFrame - 1]) &&
+    /^\s*[─━]{5,}\s*$/.test(view[lastFrame - 2])) return 'ready'
   return lane.received ? 'running' : 'starting'
+}
+
+function refreshLane(lane) {
+  if (lanes.get(lane.id) !== lane || lane.exit !== null || lane.stopping || sending || lane.outputPending) return
+  const value = inspect(lane)
+  if (value === 'ready' && Date.now() < lane.inputUntil) return
+  if (value === lane.status) return
+  lane.status = value
+  broadcast(status())
+}
+
+function submitLane(lane) {
+  lane.status = 'running'
+  lane.inputUntil = Date.now() + 300
+  clearTimeout(lane.recheck)
+  lane.recheck = setTimeout(() => refreshLane(lane), 310)
 }
 
 function receive(lane, data) {
@@ -91,12 +113,7 @@ function receive(lane, data) {
   broadcast({ type: 'data', run: lane.run, lane: lane.id, data })
   lane.screen.write(data, () => {
     lane.outputPending -= 1
-    if (lanes.get(lane.id) !== lane || lane.exit !== null || lane.stopping) return
-    const value = inspect(lane)
-    if ((sending || Date.now() < lane.inputUntil) && value === 'ready') return
-    if (value === lane.status) return
-    lane.status = value
-    broadcast(status())
+    refreshLane(lane)
   })
 }
 
@@ -115,6 +132,7 @@ function spawnLane(id, directory) {
   lane.ended = new Promise(resolve => {
     process.onExit(({ exitCode }) => {
       lane.exit = lane.stopping ? 0 : exitCode
+      clearTimeout(lane.recheck)
       lane.screen.dispose()
       if (lanes.get(id) === lane) broadcast(status())
       resolve()
@@ -181,6 +199,7 @@ function updateSize(cols, rows) {
     if (lane.exit !== null || lane.stopping) continue
     lane.screen.resize(cols, rows)
     lane.process.resize(cols, rows)
+    refreshLane(lane)
   }
 }
 
@@ -194,10 +213,7 @@ async function sendToBoth(socket, input) {
     return push(socket, { type: 'notice', text: 'Os dois terminais precisam estar no campo de prompt.' })
   }
   sending = true
-  for (const lane of pair) {
-    lane.status = 'running'
-    lane.inputUntil = Date.now() + 300
-  }
+  for (const lane of pair) submitLane(lane)
   broadcast(status())
   try {
     for (const lane of pair) lane.process.write('\x1b[200~' + text + '\x1b[201~')
@@ -264,6 +280,7 @@ server.on('upgrade', (request, socket, head) => {
 sockets.on('connection', socket => {
   push(socket, {
     type: 'meta', item: title, kind: config.kind, demo: config.demo,
+    bypassPermissions: !config.demo,
     project: config.projectName, model: config.model, sample: config.projectName === 'Projeto de exemplo',
   })
   push(socket, { type: 'reset', run })
@@ -285,12 +302,16 @@ sockets.on('connection', socket => {
       if (message.type === 'input' && !transitioning && !sending && typeof message.data === 'string' && message.data.length <= 16_000) {
         const lane = lanes.get(message.lane)
         if (!lane || lane.exit !== null || lane.stopping) return
-        lane.inputUntil = message.data.includes('\r') ? Date.now() + 300 : 0
-        if (lane.status === 'ready') {
-          lane.status = 'running'
+        const data = message.data.replace(/\x1b\[[IO]/g, '')
+        if (!data) return
+        if (data.includes('\r')) {
+          submitLane(lane)
+          broadcast(status())
+        } else if (lane.status === 'ready' && (data.startsWith('\x1b[200~') || /^[^\x00-\x1f\x7f]/.test(data))) {
+          lane.status = 'draft'
           broadcast(status())
         }
-        lane.process.write(message.data)
+        lane.process.write(data)
       }
     } catch (error) {
       push(socket, { type: 'notice', text: error.message })

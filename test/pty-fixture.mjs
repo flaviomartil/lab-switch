@@ -26,6 +26,6 @@ process.stdin.on('data', data => {
     }
     input = ''
     clearTimeout(readyTimer)
-    readyTimer = setTimeout(() => process.stdout.write('\r\n❯ '), 400)
+    readyTimer = setTimeout(() => process.stdout.write('\r\n❯ '), 30)
   }
 })
