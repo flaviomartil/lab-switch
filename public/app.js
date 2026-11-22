@@ -8,6 +8,119 @@ const stopButton = element('stop')
 const connection = element('connection')
 const sample = 'No arquivo rotina.tsv, conte as tarefas marcadas como feito e diga o identificador da última concluída.'
 
+const historyButton = element('history')
+const historyDialog = element('history-dialog')
+const historyList = element('history-list')
+const historyDetail = element('history-detail')
+const numberFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
+const historyDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+let savedEntries = []
+let selectedHistory = null
+
+function make(tag, text, className) {
+  const node = document.createElement(tag)
+  if (text !== undefined) node.textContent = text
+  if (className) node.className = className
+  return node
+}
+
+function selectHistory(id) {
+  selectedHistory = id
+  for (const button of historyList.querySelectorAll('button')) {
+    if (button.dataset.id === id) button.setAttribute('aria-current', 'true')
+    else button.removeAttribute('aria-current')
+  }
+  historyDetail.replaceChildren(make('p', 'Carregando comparação…'))
+  post({ type: 'history-open', id })
+}
+
+function showHistoryList(entries) {
+  savedEntries = entries
+  historyButton.textContent = entries.length ? 'Histórico · ' + entries.length : 'Histórico'
+  historyList.replaceChildren()
+  for (const entry of entries) {
+    const button = make('button')
+    button.type = 'button'
+    button.dataset.id = entry.id
+    if (entry.id === selectedHistory) button.setAttribute('aria-current', 'true')
+    button.append(make('span', historyDate.format(new Date(entry.startedAt)), 'history-date'), make('span', entry.prompt))
+    button.addEventListener('click', () => selectHistory(entry.id))
+    historyList.append(button)
+  }
+  if (!historyDialog.open) return
+  if (!entries.length) historyDetail.replaceChildren(make('p', 'Envie um prompt aos dois terminais para criar a primeira comparação.'))
+  else if (!entries.some(entry => entry.id === selectedHistory)) selectHistory(entries[0].id)
+}
+
+function effectiveMode(mode) {
+  return { bypassPermissions: 'Bypass', auto: 'Auto', default: 'Manual', plan: 'Plano', acceptEdits: 'Aceitar edições', simulated: 'Simulado' }[mode] ?? mode ?? '—'
+}
+
+function showComparison(entry) {
+  if (selectedHistory !== entry.id) return
+  const statusLabel = { complete: 'Concluída', partial: 'Incompleta', running: 'Em andamento' }[entry.status]
+  const origin = { imported: 'Rodada anterior importada', demo: 'Demonstração', live: 'Enviada no Lab' }[entry.source]
+  const sides = ids.map(id => entry.sides[id])
+  const labels = ids.map(id => entry.labels[id])
+  const rows = [
+    ['Modo efetivo', side => effectiveMode(side?.permissionMode)],
+    ['Modelo', side => side?.model ?? '—'],
+    ['Entrada total', 'input'], ['Entrada nova', 'fresh'], ['Cache lido', 'cacheRead'],
+    ['Cache criado', 'cacheWritten'], ['Saída', 'output'], ['Requisições medidas', 'requests'],
+    ['Chamadas', 'tools'], ['Erros de ferramentas', 'toolErrors'], ['Tempo', 'durationMs'],
+  ]
+  const table = make('table', undefined, 'metrics')
+  const thead = make('thead')
+  const headings = make('tr')
+  for (const label of ['Métrica', ...labels, 'Com − sem']) headings.append(make('th', label))
+  thead.append(headings)
+  table.append(thead)
+  const tbody = make('tbody')
+  for (const [label, field] of rows) {
+    const row = make('tr')
+    const head = make('th', label)
+    head.scope = 'row'
+    row.append(head)
+    if (typeof field === 'function') {
+      for (const side of sides) row.append(make('td', field(side)))
+      row.append(make('td', '—'))
+    } else {
+      const values = sides.map(side => side?.[field] ?? null)
+      const difference = values.every(Number.isFinite) ? values[0] - values[1] : null
+      const format = value => !Number.isFinite(value) ? '—'
+        : field === 'durationMs' ? numberFormat.format(value / 1000) + ' s' : numberFormat.format(value)
+      for (const value of values) row.append(make('td', format(value)))
+      row.append(make('td', (difference > 0 ? '+' : '') + format(difference)))
+    }
+    tbody.append(row)
+  }
+  table.append(tbody)
+  const metrics = make('div', undefined, 'metric-wrap')
+  metrics.append(table)
+  const replies = make('div', undefined, 'history-replies')
+  sides.forEach((side, index) => {
+    const panel = make('section')
+    panel.append(make('h4', labels[index]), make('pre', side?.answer || 'Resposta ainda indisponível.'))
+    replies.append(panel)
+  })
+  historyDetail.replaceChildren(
+    make('h3', 'Prompt'),
+    make('p', entry.prompt),
+    make('p', [statusLabel, origin, historyDate.format(new Date(entry.startedAt))].filter(Boolean).join(' · '), 'history-date'),
+    metrics,
+    replies,
+  )
+  if (entry.source === 'imported') {
+    historyDetail.append(make('p', 'As sessões anteriores podem ter contexto diferente. Os números descrevem a rodada, sem isolar o efeito da telemetria.', 'history-date'))
+  }
+}
+
+historyButton.addEventListener('click', () => {
+  historyDialog.showModal()
+  showHistoryList(savedEntries)
+  post({ type: 'history-list' })
+})
+
 const labels = {
   starting: 'Iniciando', setup: 'Configuração', approval: 'Aguardando confirmação',
   ready: 'Pronto', draft: 'Rascunho', running: 'Em execução', stopping: 'Encerrando', stopped: 'Encerrado', error: 'Erro',
@@ -74,8 +187,11 @@ function update() {
     const pill = element(ids[index] + '-status')
     pill.dataset.state = value
     pill.textContent = labels[value]
+    const mode = state.lanes[ids[index]]?.permissionMode
+    element(ids[index] + '-mode').textContent = mode ?? (index === 0 ? 'Experimental' : 'Controle')
   })
   restartButton.disabled = !online || pending || state.sending || state.transitioning
+  historyButton.disabled = !online
   stopButton.disabled = restartButton.disabled || stopped
   sendButton.disabled = !online || pending || state.sending || state.transitioning || !ready || !prompt.value.trim()
   hint.textContent = notice || (
@@ -92,7 +208,7 @@ function update() {
 
 function connect() {
   socket = new WebSocket('ws://' + location.host + '/terminal')
-  socket.onopen = () => { notice = ''; scheduleFit(); update() }
+  socket.onopen = () => { notice = ''; scheduleFit(); post({ type: 'history-list' }); update() }
   socket.onclose = () => {
     pending = false
     state = { lanes: {} }
@@ -102,10 +218,10 @@ function connect() {
   socket.onmessage = event => {
     const message = JSON.parse(event.data)
     if (message.type === 'meta') {
-      element('with-heading').textContent = 'Com ' + message.item
-      element('without-heading').textContent = 'Sem ' + message.item
+      element('with-heading').textContent = message.labels?.with ?? 'Com ' + message.item
+      element('without-heading').textContent = message.labels?.without ?? 'Sem ' + message.item
       element('item-summary').textContent = (message.demo ? 'Demonstração de PTY · ' : 'Item testado · ') +
-        message.item + (message.bypassPermissions ? ' · Bypass de permissões' : '')
+        message.item + (message.telemetryOnly ? ' · Comparação de telemetria' : '')
       element('project-summary').textContent = message.project + (message.model ? ' · ' + message.model : '')
       element('subtitle').textContent = message.demo
         ? 'Demonstração local dos terminais. O exemplo roda sem consulta ao Claude.'
@@ -121,6 +237,8 @@ function connect() {
       sessions.get(message.lane)?.terminal.write(message.data)
     }
     if (message.type === 'state') state = message
+    if (message.type === 'history-list') showHistoryList(message.entries)
+    if (message.type === 'history-open' || message.type === 'history-entry') showComparison(message.entry)
     if (message.type === 'notice') {
       pending = false
       notice = message.text

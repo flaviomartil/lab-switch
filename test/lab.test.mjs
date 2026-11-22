@@ -8,6 +8,8 @@ import { join } from 'node:path'
 import { WebSocket } from 'ws'
 import { claudeAuthEnvironment, currentOAuthToken } from '../lib/auth.mjs'
 import { configuration } from '../lib/config.mjs'
+import { historyStore } from '../lib/history.mjs'
+import { readClaudeTurns, turnSummary } from '../lib/telemetry.mjs'
 
 test('reusa apenas o token válido e aceita a credencial fornecida explicitamente', t => {
   const folder = mkdtempSync(join(tmpdir(), 'lab-auth-test-'))
@@ -26,14 +28,17 @@ test('os dois processos Claude recebem bypass de permissões', t => {
   t.after(() => rmSync(staging, { recursive: true, force: true }))
   const config = configuration(['--claude-bin', process.execPath], process.cwd(), staging)
   for (const lane of ['with', 'without']) {
-    const { args } = config.createLane(lane, join(staging, lane))
+    const { args, env } = config.createLane(lane, join(staging, lane))
     assert.ok(args.includes('--dangerously-skip-permissions'))
     assert.ok(!args.includes('--permission-mode'))
+    assert.equal(env.CLAUDE_CODEFLOW_ENABLED, lane === 'with' ? '0' : undefined)
   }
 })
 
 test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 15_000 }, async t => {
-  const child = spawn(process.execPath, ['lab-switch.mjs', '--demo', '--port', '0'], {
+  const historyDir = mkdtempSync(join(tmpdir(), 'lab-history-test-'))
+  t.after(() => rmSync(historyDir, { recursive: true, force: true }))
+  const child = spawn(process.execPath, ['lab-switch.mjs', '--demo', '--port', '0', '--history-dir', historyDir], {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   t.after(() => { child.kill('SIGTERM') })
@@ -75,10 +80,43 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
     assert.equal(output(lane).split('Entrada recebida').length, 2)
   }
   await waitFor(ready)
+  await waitFor(() => events.some(e => e.type === 'history-entry' && e.entry.status === 'complete'))
+  const saved = events.find(e => e.type === 'history-entry' && e.entry.status === 'complete').entry
+  assert.equal(saved.prompt, 'Primeira linha\nSegunda linha')
+  assert.equal(saved.source, 'demo')
+  assert.equal(saved.sides.with.input, 31)
+  assert.equal(saved.sides.without.input, 31)
+  assert.equal(saved.sides.with.model, 'demo-local')
+  assert.equal(saved.sides.without.permissionMode, 'simulated')
+  assert.deepEqual(await historyStore(historyDir).read(saved.id), saved)
+  socket.send(JSON.stringify({ type: 'history-open', id: saved.id }))
+  await waitFor(() => events.some(e => e.type === 'history-open' && e.entry.id === saved.id))
   socket.send(JSON.stringify({ type: 'stop' }))
   await waitFor(() => state()?.lanes.with.status === 'stopped' && state().lanes.without.status === 'stopped')
   const before = events.filter(e => e.type === 'data').length
   socket.send(JSON.stringify({ type: 'send', text: 'não enviar com terminal encerrado' }))
   await waitFor(() => events.some(e => e.type === 'notice'))
   assert.equal(events.filter(e => e.type === 'data').length, before)
+})
+
+test('agrupa uso pela requisição nativa e guarda só a resposta visível', () => {
+  const usage = { input_tokens: 10, cache_read_input_tokens: 12, cache_creation_input_tokens: 3, output_tokens: 2 }
+  const text = [
+    { type: 'user', permissionMode: 'auto', message: { content: 'Tarefa de teste' } },
+    { type: 'assistant', requestId: 'one', message: { usage, content: [{ type: 'tool_use', name: 'Bash', id: 'call-one' }] } },
+    { type: 'assistant', requestId: 'one', message: { usage, content: [{ type: 'thinking', thinking: 'não persistir' }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', is_error: true, content: 'saída interna' }] } },
+    { type: 'assistant', requestId: 'two', message: { model: 'demo', usage, content: [{ type: 'text', text: 'Resposta visível' }] } },
+    { type: 'system', subtype: 'turn_duration', durationMs: 820 },
+  ].map(row => JSON.stringify(row)).join('\n')
+  const [turn] = readClaudeTurns(text)
+  const summary = turnSummary(turn)
+  assert.equal(summary.requests, 2)
+  assert.equal(summary.input, 50)
+  assert.equal(summary.output, 4)
+  assert.equal(summary.tools, 1)
+  assert.equal(summary.toolErrors, 1)
+  assert.equal(summary.permissionMode, 'auto')
+  assert.equal(summary.durationMs, 820)
+  assert.equal(summary.answer, 'Resposta visível')
 })

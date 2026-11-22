@@ -2,6 +2,7 @@
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { chmodSync, existsSync, statSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,10 +10,12 @@ import pty from 'node-pty'
 import headless from '@xterm/headless'
 import { WebSocket, WebSocketServer } from 'ws'
 import { configuration } from './lib/config.mjs'
+import { ClaudeJournal, turnSummary } from './lib/telemetry.mjs'
+import { defaultHistoryPath, historyStore } from './lib/history.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 if (process.argv.includes('--help')) {
-  console.log('lab-switch [start] [--kind mod|skill|hook|mcp|agent --item PATH] [--project PATH] [--model NAME] [--port 4178] [--code-mode] [--demo]')
+  console.log('lab-switch [start] [--kind mod|skill|hook|mcp|agent --item PATH] [--project PATH] [--model NAME] [--port 4178] [--code-mode] [--active-codeflow] [--history-dir PATH] [--demo]')
   process.exit(0)
 }
 const scratch = await mkdtemp(join(tmpdir(), 'lab-switch-'))
@@ -36,11 +39,18 @@ const ids = ['with', 'without']
 const sockets = new WebSocketServer({ noServer: true, maxPayload: 65_536 })
 const lanes = new Map()
 const title = config.itemName
+const history = historyStore(config.historyDir ?? (config.demo ? join(scratch, 'history') : defaultHistoryPath()))
+const comparisons = new Map()
+const labels = config.telemetryOnly
+  ? { with: 'Com telemetria', without: 'Sem telemetria' }
+  : { with: 'Com ' + title, without: 'Sem ' + title }
 let dimensions = { cols: 74, rows: 19 }
 let run = 0
+let pairId
 let sending = false
 let transitioning = false
 let closing = false
+let collecting
 
 function push(socket, payload) {
   if (socket.readyState !== WebSocket.OPEN) return
@@ -64,7 +74,9 @@ function laneStatus(lane) {
 function status() {
   return {
     type: 'state', run, sending, transitioning,
-    lanes: Object.fromEntries(ids.map(id => [id, { status: laneStatus(lanes.get(id)) }])),
+    lanes: Object.fromEntries(ids.map(id => [id, {
+      status: laneStatus(lanes.get(id)), permissionMode: lanes.get(id)?.permissionMode ?? null,
+    }])),
   }
 }
 
@@ -93,8 +105,13 @@ function refreshLane(lane) {
   if (lanes.get(lane.id) !== lane || lane.exit !== null || lane.stopping || sending || lane.outputPending) return
   const value = inspect(lane)
   if (value === 'ready' && Date.now() < lane.inputUntil) return
-  if (value === lane.status) return
+  const buffer = lane.screen.buffer.active
+  const rows = Array.from({ length: 6 }, (_, index) =>
+    buffer.getLine(buffer.baseY + lane.screen.rows - 1 - index)?.translateToString(true) ?? '')
+  const mode = rows.join('\n').match(/(bypass permissions|manual mode|auto mode|plan mode|accept edits) on/i)?.[1]?.toLowerCase()
+  if (value === lane.status && (!mode || mode === lane.permissionMode)) return
   lane.status = value
+  if (mode) lane.permissionMode = mode
   broadcast(status())
 }
 
@@ -118,7 +135,8 @@ function receive(lane, data) {
 }
 
 function spawnLane(id, directory) {
-  const { args, env } = config.createLane(id, join(directory, id))
+  const sessionId = randomUUID()
+  const { args, env } = config.createLane(id, join(directory, id), sessionId)
   const process = pty.spawn(config.command, args, {
     name: 'xterm-256color', ...dimensions, cwd: join(directory, id), env,
   })
@@ -126,6 +144,7 @@ function spawnLane(id, directory) {
   const lane = {
     id, run, process, screen, history: '', exit: null, stopping: false,
     status: 'starting', received: false, inputUntil: 0, outputPending: 0,
+    journal: new ClaudeJournal(config.profiles[id], sessionId), permissionMode: null,
   }
   lanes.set(id, lane)
   process.onData(data => receive(lane, data))
@@ -180,6 +199,7 @@ async function reset() {
     directory = await mkdtemp(join(scratch, 'run-'))
     config.preparePair()
     run += 1
+    pairId = randomUUID()
     broadcast({ type: 'reset', run })
     for (const id of ids) spawnLane(id, directory)
   } catch (error) {
@@ -190,6 +210,61 @@ async function reset() {
     broadcast(status())
   }
 }
+
+async function publishHistory(socket) {
+  try {
+    const message = { type: 'history-list', entries: await history.list() }
+    if (socket) push(socket, message)
+    else broadcast(message)
+  } catch {
+    const message = { type: 'notice', text: 'Não foi possível ler o histórico do Lab.' }
+    if (socket) push(socket, message)
+    else broadcast(message)
+  }
+}
+
+async function collectPending() {
+  try {
+    for (const pending of comparisons.values()) {
+      const { record, pair, after } = pending
+      const updated = { ...record, sides: { ...record.sides } }
+      let changed = false
+      for (const lane of pair) {
+        if (record.sides[lane.id]?.complete) continue
+        await lane.journal.poll()
+        const observed = lane.journal.find(record.prompt, after)
+        if (observed?.complete || (lane.exit !== null && observed)) {
+          const summary = turnSummary(observed)
+          if (JSON.stringify(record.sides[lane.id]) !== JSON.stringify(summary)) {
+            updated.sides[lane.id] = summary
+            changed = true
+          }
+        }
+      }
+      const status = ids.every(id => updated.sides[id]?.complete) ? 'complete'
+        : pair.some(lane => lane.exit !== null) ? 'partial' : 'running'
+      if (changed || record.status !== status) {
+        updated.status = status
+        await history.write(updated)
+        pending.record = updated
+        broadcast({ type: 'history-entry', entry: updated })
+        await publishHistory()
+      }
+      if (status === 'complete' || pair.every(lane => lane.exit !== null)) comparisons.delete(record.id)
+    }
+  } catch (error) {
+    console.error('Histórico:', error.code ?? error.name)
+  }
+}
+
+function collectHistory() {
+  if (!collecting && comparisons.size > 0) {
+    collecting = collectPending().finally(() => { collecting = null })
+  }
+  return collecting
+}
+
+const historyPoll = setInterval(() => void collectHistory(), 540).unref()
 
 function updateSize(cols, rows) {
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 30 || cols > 280 || rows < 10 || rows > 70) return
@@ -219,8 +294,22 @@ async function sendToBoth(socket, input) {
     for (const lane of pair) lane.process.write('\x1b[200~' + text + '\x1b[201~')
     await delay(70)
     if (pair.some(lane => lane.exit !== null || lane.stopping)) throw new Error('Um terminal encerrou antes do envio.')
+    const after = Date.now()
+    const record = {
+      id: randomUUID(), pairId, startedAt: new Date(after).toISOString(), prompt: text,
+      item: title, labels, status: 'running', source: config.demo ? 'demo' : 'live',
+      sides: { with: null, without: null },
+    }
     for (const lane of pair) lane.process.write('\r')
     push(socket, { type: 'sent' })
+    try {
+      await history.write(record)
+      broadcast({ type: 'history-entry', entry: record })
+      await publishHistory()
+    } catch {
+      push(socket, { type: 'notice', text: 'O prompt foi enviado. Falhou a gravação inicial do histórico.' })
+    }
+    comparisons.set(record.id, { record, pair, after })
   } catch (error) {
     push(socket, { type: 'notice', text: 'Falha ao enviar. Confira os terminais. ' + error.message })
   } finally {
@@ -281,6 +370,7 @@ sockets.on('connection', socket => {
   push(socket, {
     type: 'meta', item: title, kind: config.kind, demo: config.demo,
     bypassPermissions: !config.demo,
+    labels, telemetryOnly: config.telemetryOnly,
     project: config.projectName, model: config.model, sample: config.projectName === 'Projeto de exemplo',
   })
   push(socket, { type: 'reset', run })
@@ -299,6 +389,11 @@ sockets.on('connection', socket => {
       if (message.type === 'reset') await reset()
       if (message.type === 'stop' && !transitioning && !sending) await stop()
       if (message.type === 'send') await sendToBoth(socket, message.text)
+      if (message.type === 'history-list') await publishHistory(socket)
+      if (message.type === 'history-open') {
+        const entry = await history.read(message.id)
+        if (entry) push(socket, { type: 'history-open', entry })
+      }
       if (message.type === 'input' && !transitioning && !sending && typeof message.data === 'string' && message.data.length <= 16_000) {
         const lane = lanes.get(message.lane)
         if (!lane || lane.exit !== null || lane.stopping) return
@@ -322,7 +417,10 @@ sockets.on('connection', socket => {
 async function shutdown() {
   if (closing) return
   closing = true
+  clearInterval(historyPoll)
   await stop()
+  await collecting
+  await collectHistory()
   for (const socket of sockets.clients) socket.terminate()
   server.close()
   await rm(scratch, { recursive: true, force: true })

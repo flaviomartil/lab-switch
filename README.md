@@ -11,9 +11,15 @@ npm ci
 npm start
 ```
 
-Acesse http://127.0.0.1:4178. O item padrão é o Codeflow 1.1.1 incluído, com o modo ativo à esquerda. O controle usa Claude Code sem carregar o pacote. O campo compartilhado envia quando os dois editores de prompt estão prontos. Cada terminal também aceita teclado e confirmações individualmente.
+Acesse http://127.0.0.1:4178. O item padrão é o Codeflow 1.1.1 incluído. À esquerda ele roda em modo passivo e exibe a telemetria. À direita o Claude roda sem carregar o pacote. O campo compartilhado envia quando os dois editores de prompt estão prontos. Cada terminal também aceita teclado e confirmações individualmente.
 
 Os dois processos do Claude iniciam com `--dangerously-skip-permissions`. Use o Lab com projetos e extensões confiáveis. Os processos usam os privilégios da conta local. A interface envia pelo campo compartilhado assim que os dois editores estiverem prontos, independentemente do foco.
+
+## Histórico
+
+O botão **Histórico** abre os envios compartilhados e as duas respostas. As métricas vêm do transcript nativo de cada Claude, inclusive no lado sem Codeflow. O histórico mostra o modo efetivo no envio, modelo, tempo, uso de tokens, requisições, chamadas e erros. O modo efetivo pode mudar durante a sessão pelo atalho do Claude.
+
+Os dados ficam em `~/Library/Application Support/Lab Switch/history` no Mac e em `${XDG_STATE_HOME:-~/.local/state}/lab-switch/history` no Linux. `--history-dir` permite apontar para outro diretório. O histórico salva texto digitado no campo compartilhado e respostas visíveis. Mantenha esse diretório privado.
 
 ## Login
 
@@ -31,7 +37,7 @@ npm start -- --model sonnet --port 4180
 npm start -- --kind mod --item /caminho/codeflow --project /caminho/projeto
 ```
 
-`--kind` aceita `mod` (pasta ou ZIP), `skill` (pasta com SKILL.md ou o arquivo), `hook` (JSON de settings com a chave hooks), `mcp` (JSON com mcpServers) e `agent` (JSON de agentes para --agents). `--code-mode` pede o Code Mode nativo em ambos. `--claude-bin` aponta para um executável específico.
+`--kind` aceita `mod` (pasta ou ZIP), `skill` (pasta com SKILL.md ou o arquivo), `hook` (JSON de settings com a chave hooks), `mcp` (JSON com mcpServers) e `agent` (JSON de agentes para --agents). `--code-mode` pede o Code Mode nativo em ambos. `--active-codeflow` também ativa filtros e guarda no lado experimental, para um teste separado. `--claude-bin` aponta para um executável específico.
 
 ## Dados locais
 

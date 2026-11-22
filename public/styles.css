@@ -119,6 +119,30 @@ h1 em { font-family: Fraunces, Georgia, serif; font-weight: 600; color: var(--te
 .composer-foot p { margin: 0; color: #4c493e; font-size: 13px; line-height: 1.35; }
 .primary { box-shadow: 2px 2px var(--ink); background: var(--yellow); flex-shrink: 0; }
 .primary span { margin-left: 5px; }
+dialog {
+  width: min(1080px, calc(100vw - 32px)); max-height: min(82vh, 880px); padding: 0;
+  border: 2px solid var(--ink); border-radius: 14px; background: var(--card); color: var(--ink);
+  box-shadow: 6px 6px var(--ink); overflow: auto;
+}
+dialog::backdrop { background: rgba(28, 26, 23, .48); }
+.history-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 2px solid var(--ink); }
+.history-head h2 { margin: 0; font-size: 22px; }
+.history-content { display: grid; grid-template-columns: minmax(160px, 235px) minmax(0, 1fr); }
+#history-list { display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--paper-dark); }
+#history-list button { border: 1px solid #8c8579; border-radius: 7px; background: var(--card); padding: 9px; text-align: left; overflow-wrap: anywhere; }
+#history-list button[aria-current="true"] { background: var(--yellow-soft); border-color: var(--ink); }
+.history-date { display: block; margin-bottom: 4px; font: 11px var(--mono); }
+#history-detail { min-width: 0; padding: 14px 16px; }
+#history-detail h3 { margin: 0 0 6px; }
+#history-detail p { margin: 0 0 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.metric-wrap { overflow-x: auto; }
+.metrics { width: 100%; border-collapse: collapse; font-size: 13px; }
+.metrics :is(th,td) { padding: 7px 6px; border-bottom: 1px solid #d8d3c8; text-align: left; white-space: nowrap; }
+.metrics thead { background: var(--yellow-soft); }
+.history-replies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.history-replies section { min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; padding: 9px; }
+.history-replies h4 { margin: 0 0 6px; font-size: 13px; }
+.history-replies pre { margin: 0; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .bar-inner, .workbench { width: calc(100% - 28px); }
   .illustration { width: 75px; margin-right: 2px; }
@@ -127,6 +151,9 @@ h1 em { font-family: Fraunces, Georgia, serif; font-weight: 600; color: var(--te
   .pair { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .terminal { height: 280px; }
   .intro { padding-block: 18px 12px; }
+  .history-content, .history-replies { grid-template-columns: minmax(0, 1fr); }
+  #history-list { max-height: 180px; overflow: auto; }
+  .brand-mark { display: none; }
 }
 @media (max-width: 390px) {
   .illustration { display: none; }

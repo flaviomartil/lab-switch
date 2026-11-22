@@ -16,6 +16,7 @@
       <div class="brand"><span class="brand-mark" aria-hidden="true">↔</span> Lab Switch</div>
       <div class="actions">
         <span class="connection" id="connection"><i></i><span>Conectando</span></span>
+        <button type="button" id="history" class="secondary" disabled>Histórico</button>
         <button type="button" id="restart" class="secondary" disabled>Novo par</button>
         <button type="button" id="stop" class="quiet" disabled>Encerrar</button>
       </div>
@@ -37,14 +38,14 @@
     <section class="pair" aria-label="Terminais da comparação">
       <article class="lane lane-with" aria-labelledby="with-heading">
         <div class="lane-top">
-          <div><h2 id="with-heading">Com item</h2><p>Experimental</p></div>
+          <div><h2 id="with-heading">Com item</h2><p id="with-mode">Experimental</p></div>
           <span id="with-status" class="pill" data-state="starting">Iniciando</span>
         </div>
         <div class="surface"><div id="with-terminal" class="terminal" aria-label="Terminal experimental"></div></div>
       </article>
       <article class="lane lane-without" aria-labelledby="without-heading">
         <div class="lane-top">
-          <div><h2 id="without-heading">Sem item</h2><p>Controle</p></div>
+          <div><h2 id="without-heading">Sem item</h2><p id="without-mode">Controle</p></div>
           <span id="without-status" class="pill" data-state="starting">Iniciando</span>
         </div>
         <div class="surface"><div id="without-terminal" class="terminal" aria-label="Terminal de controle"></div></div>
@@ -63,5 +64,15 @@
       </div>
     </form>
   </main>
+  <dialog id="history-dialog" aria-labelledby="history-title">
+    <div class="history-head">
+      <h2 id="history-title">Histórico do Lab</h2>
+      <form method="dialog"><button class="secondary" aria-label="Fechar histórico">Fechar</button></form>
+    </div>
+    <div class="history-content">
+      <nav id="history-list" aria-label="Rodadas salvas"></nav>
+      <div id="history-detail" aria-live="polite"></div>
+    </div>
+  </dialog>
 </body>
 </html>
