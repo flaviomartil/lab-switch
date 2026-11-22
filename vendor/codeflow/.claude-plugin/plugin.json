@@ -1,0 +1,50 @@
+{
+  "name": "codeflow",
+  "version": "1.1.1",
+  "description": "Telemetria de turnos e experimento opt-in de redução de contexto para Claude Code",
+  "author": { "name": "Codeflow" },
+  "userConfig": {
+    "maxFileLines": {
+      "type": "number",
+      "title": "Linhas por leitura",
+      "description": "Máximo de linhas de um arquivo lido que entram no contexto (o resto vira resumo com pontos de entrada)",
+      "default": 200
+    },
+    "maxToolResultChars": {
+      "type": "number",
+      "title": "Caracteres por resultado de leitura ou busca",
+      "description": "Máximo de caracteres de um resultado de ferramenta (busca, teste, CSV) que chega ao modelo",
+      "default": 2000
+    },
+    "maxListItems": {
+      "type": "number",
+      "title": "Itens por resultado de busca",
+      "description": "Máximo de itens de uma lista (arquivos, ocorrências) mantidos antes de resumir",
+      "default": 20
+    },
+    "guardPatterns": {
+      "type": "string",
+      "title": "Padrões adicionais para sinalizar",
+      "description": "Padrões literais separados por vírgula. O modo ativo sinaliza chamadas elegíveis com ask, preservando a decisão nativa.",
+      "default": ""
+    },
+    "turnSummary": {
+      "type": "boolean",
+      "title": "Resumo por resposta",
+      "description": "Mostra duração, requisições, ferramentas, tokens e contexto sob cada resposta.",
+      "default": true
+    },
+    "thinking": {
+      "type": "boolean",
+      "title": "Contar blocos de raciocínio",
+      "description": "Conta blocos e palavras quando expostos pelo Claude, sem copiar texto.",
+      "default": false
+    },
+    "sessionLog": {
+      "type": "boolean",
+      "title": "Salvar resumo ao sair",
+      "description": "Grava um resumo numérico da sessão em .codeflow no projeto.",
+      "default": false
+    }
+  }
+}

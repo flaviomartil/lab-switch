@@ -1,0 +1,4 @@
+{
+  "description": "O hooks module do codeflow",
+  "modules": ["./register.ts"]
+}

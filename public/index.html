@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab Switch</title>
+  <link rel="stylesheet" href="/xterm.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/xterm.js"></script>
+  <script defer src="/fit.js"></script>
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">↔</span> Lab Switch</div>
+      <div class="actions">
+        <span class="connection" id="connection"><i></i><span>Conectando</span></span>
+        <button type="button" id="restart" class="secondary" disabled>Novo par</button>
+        <button type="button" id="stop" class="quiet" disabled>Encerrar</button>
+      </div>
+    </div>
+  </header>
+  <main class="workbench">
+    <section class="intro" aria-labelledby="title">
+      <div>
+        <h1 id="title">Um prompt, <em>dois Claudes.</em></h1>
+        <p id="subtitle">Compare duas sessões isoladas com a mesma entrada.</p>
+      </div>
+      <img class="illustration" src="/compare.svg" alt="" width="126" height="82">
+    </section>
+
+    <div class="runline">
+      <span id="item-summary">Preparando a comparação</span>
+      <span id="project-summary"></span>
+    </div>
+    <section class="pair" aria-label="Terminais da comparação">
+      <article class="lane lane-with" aria-labelledby="with-heading">
+        <div class="lane-top">
+          <div><h2 id="with-heading">Com item</h2><p>Experimental</p></div>
+          <span id="with-status" class="pill" data-state="starting">Iniciando</span>
+        </div>
+        <div class="surface"><div id="with-terminal" class="terminal" aria-label="Terminal experimental"></div></div>
+      </article>
+      <article class="lane lane-without" aria-labelledby="without-heading">
+        <div class="lane-top">
+          <div><h2 id="without-heading">Sem item</h2><p>Controle</p></div>
+          <span id="without-status" class="pill" data-state="starting">Iniciando</span>
+        </div>
+        <div class="surface"><div id="without-terminal" class="terminal" aria-label="Terminal de controle"></div></div>
+      </article>
+    </section>
+
+    <form class="composer" id="composer">
+      <div class="composer-head">
+        <label for="prompt">Prompt compartilhado</label>
+        <button id="example" class="example" type="button" hidden>Usar exemplo</button>
+      </div>
+      <textarea id="prompt" rows="2" maxlength="12000" placeholder="Escreva o prompt que vai para os dois terminais…"></textarea>
+      <div class="composer-foot">
+        <p id="hint" role="status">Aguardando conexão com o laboratório local.</p>
+        <button id="send" class="primary" type="submit" disabled>Enviar aos dois <span aria-hidden="true">↗</span></button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

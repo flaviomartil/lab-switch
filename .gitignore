@@ -1,0 +1,14 @@
+node_modules/
+.nightshift/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+*.zip
+.claude/
+.claude.json
+.credentials.json
+.codeflow/
+/vendor/codeflow/tsconfig.json
