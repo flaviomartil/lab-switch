@@ -1,4 +1,4 @@
-export type TurnOutcome = 'completo' | 'interrompido' | 'recusado' | 'erro' | 'em andamento'
+export type TurnOutcome = 'complete' | 'interrupted' | 'refused' | 'error' | 'in progress'
 
 export interface TokenUsage {
   input: number | null
@@ -8,9 +8,9 @@ export interface TokenUsage {
 }
 
 export interface ThinkingSummary {
-  /** Quantidade de blocos de raciocínio observados no turno. */
+  /** Number of reasoning blocks observed in the turn. */
   blocks: number
-  /** Palavras totais de raciocínio (aproximação barata). */
+  /** Total reasoning words (cheap approximation). */
   words: number
 }
 
@@ -60,7 +60,7 @@ export function newTurnTelemetry(turnId: string | null, startedAtMs: number | nu
     usage: null,
     models: [],
     efforts: [],
-    outcome: 'em andamento',
+    outcome: 'in progress',
     thinking: { blocks: 0, words: 0 },
   }
 }
@@ -79,7 +79,7 @@ export function newSessionTelemetry(): SessionTelemetry {
   }
 }
 
-/** Registra um bloco de raciocínio (texto_thinking) no turno corrente. */
+/** Records a reasoning block (thinking text) in the current turn. */
 export function observeThinkingBlock(session: SessionTelemetry, text: string): void {
   const words = text.split(/\s+/).filter(w => w !== '').length
   session.thinkingBlocks += 1
@@ -156,10 +156,10 @@ export function finalizeTurnTelemetry(
     turn.durationMs = Math.max(0, nowMs - turn.startedAtMs)
   }
   addRequestUsage(turn, e.usage, session)
-  if (e.isAborted === true || e.reason === 'aborted') turn.outcome = 'interrompido'
-  else if (e.reason === 'refusal') turn.outcome = 'recusado'
-  else if (e.reason === 'error') turn.outcome = 'erro'
-  else turn.outcome = 'completo'
+  if (e.isAborted === true || e.reason === 'aborted') turn.outcome = 'interrupted'
+  else if (e.reason === 'refusal') turn.outcome = 'refused'
+  else if (e.reason === 'error') turn.outcome = 'error'
+  else turn.outcome = 'complete'
   session.turns.push(turn)
   session.current = null
   return turn
@@ -207,7 +207,7 @@ export function avg(values: number[]): number | null {
   return values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length
 }
 
-/** Mediana simples (sem ordenar o array do chamador). */
+/** Simple median (without sorting the caller's array). */
 export function median(values: number[]): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)

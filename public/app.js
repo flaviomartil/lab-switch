@@ -6,12 +6,12 @@ const sendButton = element('send')
 const restartButton = element('restart')
 const stopButton = element('stop')
 const connection = element('connection')
-const sample = 'No arquivo rotina.tsv, conte as tarefas marcadas como feito e diga o identificador da última concluída.'
+const sample = 'In the file routine.tsv, count the tasks marked as done and give the identifier of the last one completed.'
 
 const historyList = element('history-list')
 const historyDetail = element('history-detail')
-const numberFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
-const historyDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+const numberFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
+const historyDate = new Intl.DateTimeFormat('en-US', { dateStyle: 'short', timeStyle: 'short' })
 let savedEntries = []
 let selectedHistory = null
 let followLatest = false
@@ -36,13 +36,13 @@ function selectHistory(id, user = false) {
     if (button.dataset.id === id) button.setAttribute('aria-current', 'true')
     else button.removeAttribute('aria-current')
   }
-  historyDetail.replaceChildren(make('p', 'Carregando comparação…'))
+  historyDetail.replaceChildren(make('p', 'Loading comparison…'))
   post({ type: 'history-open', id })
 }
 
 function showHistoryList(entries) {
   savedEntries = entries
-  element('lab-title').textContent = entries.length ? 'Rodadas · ' + entries.length : 'Rodadas'
+  element('lab-title').textContent = entries.length ? 'Rounds · ' + entries.length : 'Rounds'
   historyList.replaceChildren()
   for (const entry of entries) {
     const button = make('button')
@@ -50,36 +50,36 @@ function showHistoryList(entries) {
     button.dataset.id = entry.id
     if (entry.id === selectedHistory) button.setAttribute('aria-current', 'true')
     const when = make('span', historyDate.format(new Date(entry.startedAt)), 'history-date')
-    if (entry.status === 'running') when.append(make('span', ' · em andamento', 'live'))
+    if (entry.status === 'running') when.append(make('span', ' · in progress', 'live'))
     button.append(when, make('span', entry.prompt))
     button.addEventListener('click', () => selectHistory(entry.id, true))
     historyList.append(button)
   }
-  if (!entries.length) historyDetail.replaceChildren(make('p', 'Envie um prompt aos dois terminais para criar a primeira comparação.'))
+  if (!entries.length) historyDetail.replaceChildren(make('p', 'Send a prompt to both terminals to create the first comparison.'))
   else if (!entries.some(entry => entry.id === selectedHistory)) selectHistory(entries[0].id)
 }
 
 function effectiveMode(mode) {
-  return { bypassPermissions: 'Bypass', auto: 'Auto', default: 'Manual', plan: 'Plano', acceptEdits: 'Aceitar edições', simulated: 'Simulado' }[mode] ?? mode ?? '—'
+  return { bypassPermissions: 'Bypass', auto: 'Auto', default: 'Manual', plan: 'Plan', acceptEdits: 'Accept edits', simulated: 'Simulated' }[mode] ?? mode ?? '—'
 }
 
 function showComparison(entry) {
   if (selectedHistory !== entry.id) return
-  const statusLabel = { complete: 'Concluída', partial: 'Incompleta', running: 'Em andamento' }[entry.status]
-  const origin = { imported: 'Rodada anterior importada', demo: 'Demonstração', live: 'Enviada no Lab' }[entry.source]
+  const statusLabel = { complete: 'Complete', partial: 'Incomplete', running: 'In progress' }[entry.status]
+  const origin = { imported: 'Previous round imported', demo: 'Demo', live: 'Sent in Lab' }[entry.source]
   const sides = ids.map(id => entry.sides[id])
   const labels = ids.map(id => entry.labels[id])
   const rows = [
-    ['Modo efetivo', side => effectiveMode(side?.permissionMode)],
-    ['Modelo', side => side?.model ?? '—'],
-    ['Entrada total', 'input'], ['Entrada nova', 'fresh'], ['Cache lido', 'cacheRead'],
-    ['Cache criado', 'cacheWritten'], ['Saída', 'output'], ['Requisições medidas', 'requests'],
-    ['Chamadas', 'tools'], ['Erros de ferramentas', 'toolErrors'], ['Tempo', 'durationMs'],
+    ['Effective mode', side => effectiveMode(side?.permissionMode)],
+    ['Model', side => side?.model ?? '—'],
+    ['Total input', 'input'], ['New input', 'fresh'], ['Cache read', 'cacheRead'],
+    ['Cache created', 'cacheWritten'], ['Output', 'output'], ['Measured requests', 'requests'],
+    ['Calls', 'tools'], ['Tool errors', 'toolErrors'], ['Time', 'durationMs'],
   ]
   const table = make('table', undefined, 'metrics')
   const thead = make('thead')
   const headings = make('tr')
-  for (const label of ['Métrica', ...labels, 'Com − sem']) headings.append(make('th', label))
+  for (const label of ['Metric', ...labels, 'With − without']) headings.append(make('th', label))
   thead.append(headings)
   table.append(thead)
   const tbody = make('tbody')
@@ -107,12 +107,12 @@ function showComparison(entry) {
   const replies = make('div', undefined, 'history-replies')
   sides.forEach((side, index) => {
     const panel = make('section')
-    panel.append(make('h4', labels[index]), make('pre', side?.answer || 'Resposta ainda indisponível.'))
+    panel.append(make('h4', labels[index]), make('pre', side?.answer || 'Answer not available yet.'))
     replies.append(panel)
   })
   const ownerText = {
-    self: '✓ servido por este terminal', with: '⚠ servido pelo outro terminal', without: '⚠ servido pelo outro terminal',
-    external: '⚠ porta de outro processo', waiting: 'servidor ainda não respondia',
+    self: '✓ served by this terminal', with: '⚠ served by the other terminal', without: '⚠ served by the other terminal',
+    external: '⚠ port owned by another process', waiting: 'server was not responding yet',
   }
   let prints = null
   if (sides.some(side => side?.print)) {
@@ -130,12 +130,12 @@ function showComparison(entry) {
         link.target = '_blank'
         const image = make('img')
         image.src = link.href
-        image.alt = 'Print do preview: ' + labels[index]
+        image.alt = 'Preview screenshot: ' + labels[index]
         image.loading = 'lazy'
         link.append(image)
         figure.append(caption, link)
       } else {
-        figure.append(caption, make('p', 'Sem preview nesta rodada.', 'preview-empty'))
+        figure.append(caption, make('p', 'No preview in this round.', 'preview-empty'))
       }
       prints.append(figure)
     })
@@ -144,12 +144,12 @@ function showComparison(entry) {
     make('h3', 'Prompt'),
     make('p', entry.prompt),
     make('p', [statusLabel, origin, historyDate.format(new Date(entry.startedAt))].filter(Boolean).join(' · '), 'history-date'),
-    ...(prints ? [make('h3', 'Print do preview', 'section-title'), prints] : []),
+    ...(prints ? [make('h3', 'Preview screenshot', 'section-title'), prints] : []),
     metrics,
     replies,
   )
   if (entry.source === 'imported') {
-    historyDetail.append(make('p', 'As sessões anteriores podem ter contexto diferente. Os números descrevem a rodada, sem isolar o efeito da telemetria.', 'history-date'))
+    historyDetail.append(make('p', 'Previous sessions may have a different context. The numbers describe the round without isolating the effect of telemetry.', 'history-date'))
   }
 }
 
@@ -177,12 +177,12 @@ function renderPreviews() {
     }
     owners[id] = owner
     badge.textContent = {
-      self: '✓ servido por este terminal', waiting: 'aguardando servidor', unknown: '',
-      external: '⚠ porta de outro processo da máquina',
-      with: '⚠ servido pelo outro terminal', without: '⚠ servido pelo outro terminal',
+      self: '✓ served by this terminal', waiting: 'waiting for server', unknown: '',
+      external: '⚠ port owned by another process on this machine',
+      with: '⚠ served by the other terminal', without: '⚠ served by the other terminal',
     }[owner] ?? ''
     badge.title = owner === 'with' || owner === 'without'
-      ? 'Os dois terminais compartilham as portas da máquina. O servidor deste lado não está escutando nessa porta; a página mostrada é a do outro lado.' : ''
+      ? 'Both terminals share the machine ports. The server on this side is not listening on that port; the page shown comes from the other side.' : ''
     if (url === previews[id]) continue
     const first = sentSinceLoad && !Object.values(previews).some(Boolean)
     previews[id] = url
@@ -191,7 +191,7 @@ function renderPreviews() {
     const reload = document.querySelector('[data-reload="' + id + '"]')
     link.hidden = reload.hidden = !url
     if (!url) {
-      frame.replaceChildren(make('p', 'Nenhum servidor local detectado neste terminal. Quando o Claude iniciar um (vite, next, http.server…), a página aparece aqui.', 'preview-empty'))
+      frame.replaceChildren(make('p', 'No local server detected in this terminal. When Claude starts one (vite, next, http.server…), the page appears here.', 'preview-empty'))
       continue
     }
     link.href = viewUrl(id, url)
@@ -212,8 +212,8 @@ for (const button of document.querySelectorAll('[data-reload]')) {
 }
 
 const labels = {
-  starting: 'Iniciando', setup: 'Configuração', approval: 'Aguardando confirmação',
-  ready: 'Pronto', draft: 'Rascunho', running: 'Em execução', stopping: 'Encerrando', stopped: 'Encerrado', error: 'Erro',
+  starting: 'Starting', setup: 'Setup', approval: 'Awaiting confirmation',
+  ready: 'Ready', draft: 'Draft', running: 'Running', stopping: 'Stopping', stopped: 'Stopped', error: 'Error',
 }
 const sessions = new Map()
 let socket
@@ -272,27 +272,27 @@ function update() {
   const ready = current.every(value => value === 'ready')
   const stopped = current.every(value => value === 'stopped' || value === 'error')
   connection.dataset.live = String(online)
-  connection.lastElementChild.textContent = online ? 'Conexão local' : 'Reconectando'
+  connection.lastElementChild.textContent = online ? 'Local connection' : 'Reconnecting'
   current.forEach((value, index) => {
     const pill = element(ids[index] + '-status')
     pill.dataset.state = value
     pill.textContent = labels[value]
     const mode = state.lanes[ids[index]]?.permissionMode
-    element(ids[index] + '-mode').textContent = mode ?? (index === 0 ? 'Experimental' : 'Controle')
+    element(ids[index] + '-mode').textContent = mode ?? (index === 0 ? 'Experimental' : 'Control')
   })
   restartButton.disabled = !online || pending || state.sending || state.transitioning
   renderPreviews()
   stopButton.disabled = restartButton.disabled || stopped
   sendButton.disabled = !online || pending || state.sending || state.transitioning || !ready || !prompt.value.trim()
   hint.textContent = notice || (
-    !online ? 'Reconectando ao laboratório local.'
-      : pending || state.sending ? 'Enviando a mesma entrada para os dois.'
-      : current.includes('setup') ? 'Conclua a configuração ou o login em cada terminal.'
-      : current.includes('approval') ? 'Responda à confirmação no terminal que a solicitou.'
-      : current.includes('draft') ? 'Envie ou limpe o rascunho do terminal antes de usar o prompt compartilhado.'
-      : stopped ? 'Inicie um novo par para continuar.'
-      : ready ? 'Envie pelo campo compartilhado ou use Ctrl ou ⌘ + Enter.'
-      : 'O envio fica disponível quando os dois terminais estiverem no campo de prompt.'
+    !online ? 'Reconnecting to the local lab.'
+      : pending || state.sending ? 'Sending the same input to both.'
+      : current.includes('setup') ? 'Finish the setup or login in each terminal.'
+      : current.includes('approval') ? 'Answer the confirmation in the terminal that requested it.'
+      : current.includes('draft') ? 'Send or clear the terminal draft before using the shared prompt.'
+      : stopped ? 'Start a new pair to continue.'
+      : ready ? 'Send from the shared field or use Ctrl or ⌘ + Enter.'
+      : 'Sending is available when both terminals are at the prompt field.'
   )
 }
 
@@ -309,15 +309,15 @@ function connect() {
     const message = JSON.parse(event.data)
     if (message.type === 'meta') {
       previewPorts = message.previewPorts ?? null
-      element('with-heading').textContent = message.labels?.with ?? 'Com ' + message.item
-      element('without-heading').textContent = message.labels?.without ?? 'Sem ' + message.item
+      element('with-heading').textContent = message.labels?.with ?? 'With ' + message.item
+      element('without-heading').textContent = message.labels?.without ?? 'Without ' + message.item
       for (const id of ids) element(id + '-preview-label').textContent = element(id + '-heading').textContent
-      element('item-summary').textContent = (message.demo ? 'Demonstração de PTY · ' : 'Item testado · ') +
-        message.item + (message.telemetryOnly ? ' · Comparação de telemetria' : '')
+      element('item-summary').textContent = (message.demo ? 'PTY demo · ' : 'Item under test · ') +
+        message.item + (message.telemetryOnly ? ' · Telemetry comparison' : '')
       element('project-summary').textContent = message.project + (message.model ? ' · ' + message.model : '')
       element('subtitle').textContent = message.demo
-        ? 'Demonstração local dos terminais. O exemplo roda sem consulta ao Claude.'
-        : 'Envie uma entrada e compare os resultados em sessões isoladas.'
+        ? 'Local demo of the terminals. The example runs without querying Claude.'
+        : 'Send an input and compare the results in isolated sessions.'
       element('example').hidden = !message.sample
     }
     if (message.type === 'reset') {
@@ -373,7 +373,7 @@ element('composer').addEventListener('submit', event => {
 })
 restartButton.addEventListener('click', () => {
   const open = ids.some(id => !['stopped', 'error'].includes(state.lanes[id]?.status))
-  if (open && !confirm('Abrir um novo par e descartar as cópias desta rodada?')) return
+  if (open && !confirm('Open a new pair and discard the copies from this round?')) return
   post({ type: 'reset' })
 })
 stopButton.addEventListener('click', () => post({ type: 'stop' }))

@@ -52,7 +52,7 @@ export function register(on: On, options: CodeflowOptions = {}) {
     toggle = resolveToggle(await $.env.get('CLAUDE_CODEFLOW_ENABLED').catch(() => undefined))
     const run = await $.env.get('CLAUDE_CODEFLOW_RUN').catch(() => undefined)
     runId = run && /^[A-Za-z0-9_-]{1,48}$/.test(run) ? run : null
-    await $.command.register({ name: 'codeflow', description: 'Telemetria, modo ativo e estado local do Codeflow' })
+    await $.command.register({ name: 'codeflow', description: 'Codeflow telemetry, active mode and local state' })
     return next(e)
   })
 
@@ -188,39 +188,39 @@ export function register(on: On, options: CodeflowOptions = {}) {
       const registry = runId ? await readRegistry($, runId, await $.clock.now()) : []
       return { text: buildTelemetryReport(toggle, runId, registry, telemetry, await currentContext($, telemetry)) }
     }
-    if (sub === 'pensamento' || sub === 'thinking') {
+    if (sub === 'thinking') {
       const last = telemetry.turns.at(-1) ?? telemetry.current
       return {
         text: countThinking && last
           ? buildThinkingDigest(last)
-          : 'Contagem indisponível. Habilite thinking e conclua um turno.',
+          : 'Count unavailable. Enable thinking and complete a turn.',
       }
     }
     if (sub === 'stash' || sub === 'recall' || sub === 'forget') {
-      if (!toggle.enabled) return { text: 'O stash está disponível com CLAUDE_CODEFLOW_ENABLED=1.' }
-      if (e.origin.kind !== 'composer') return { text: 'Use este comando diretamente no terminal.' }
-      if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) return { text: 'Informe um nome com até 40 letras, números, hífens ou underscores.' }
+      if (!toggle.enabled) return { text: 'The stash is available with CLAUDE_CODEFLOW_ENABLED=1.' }
+      if (e.origin.kind !== 'composer') return { text: 'Use this command directly in the terminal.' }
+      if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) return { text: 'Provide a name with up to 40 letters, numbers, hyphens or underscores.' }
       const now = await $.clock.now()
       pruneState(stash, now)
       if (sub === 'forget') {
         stash.delete(name)
-        return { text: 'Entrada removida.' }
+        return { text: 'Entry removed.' }
       }
-      if (sub === 'recall') return { text: stash.get(name)?.value ?? 'Entrada ausente ou expirada.' }
+      if (sub === 'recall') return { text: stash.get(name)?.value ?? 'Entry missing or expired.' }
       const value = e.args.trim().slice(sub.length).trimStart().slice(name.length).trim()
-      if (!value || value.length > MAX_STATE_CHARS) return { text: 'Use /codeflow stash <nome> <texto> com até 2.000 caracteres.' }
-      if (!stash.has(name) && stash.size >= MAX_STATE_ENTRIES) return { text: 'O stash está cheio. Use /codeflow forget <nome>.' }
+      if (!value || value.length > MAX_STATE_CHARS) return { text: 'Use /codeflow stash <name> <text> with up to 2,000 characters.' }
+      if (!stash.has(name) && stash.size >= MAX_STATE_ENTRIES) return { text: 'The stash is full. Use /codeflow forget <name>.' }
       stash.set(name, { value, expiresAtMs: now + STATE_TTL_MS })
       telemetry.stashes += 1
-      return { text: 'Texto guardado na memória desta sessão por 30 minutos.' }
+      return { text: 'Text kept in this session memory for 30 minutes.' }
     }
     return {
       text: [
         'Codeflow 1.1.1',
-        toggle.enabled ? 'Modo ativo' : 'Modo passivo',
-        toggle.invalid ? 'CLAUDE_CODEFLOW_ENABLED inválido. Use 0 ou 1.' : '',
-        'Use /codeflow report para ver o uso da sessão.',
-        'Use Ctrl+O para inspecionar os blocos Code do executor nativo.',
+        toggle.enabled ? 'Active mode' : 'Passive mode',
+        toggle.invalid ? 'Invalid CLAUDE_CODEFLOW_ENABLED. Use 0 or 1.' : '',
+        'Use /codeflow report to see session usage.',
+        'Use Ctrl+O to inspect the native executor Code blocks.',
       ].filter(Boolean).join('\n'),
     }
   })

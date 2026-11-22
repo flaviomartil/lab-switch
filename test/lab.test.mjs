@@ -11,7 +11,7 @@ import { configuration, hostGitEnvironment } from '../lib/config.mjs'
 import { historyStore } from '../lib/history.mjs'
 import { readClaudeTurns, turnSummary } from '../lib/telemetry.mjs'
 
-test('reusa apenas o token válido e aceita a credencial fornecida explicitamente', t => {
+test('reuses only the valid token and accepts an explicitly provided credential', t => {
   const folder = mkdtempSync(join(tmpdir(), 'lab-auth-test-'))
   t.after(() => rmSync(folder, { recursive: true, force: true }))
   const path = join(folder, '.credentials.json')
@@ -23,7 +23,7 @@ test('reusa apenas o token válido e aceita a credencial fornecida explicitament
   assert.equal(currentOAuthToken('not json'), null)
 })
 
-test('os dois processos Claude recebem bypass de permissões', t => {
+test('both Claude processes receive permission bypass', t => {
   const staging = mkdtempSync(join(tmpdir(), 'lab-permissions-test-'))
   t.after(() => rmSync(staging, { recursive: true, force: true }))
   const config = configuration(['--claude-bin', process.execPath], process.cwd(), staging)
@@ -35,7 +35,7 @@ test('os dois processos Claude recebem bypass de permissões', t => {
   }
 })
 
-test('herda a configuração do git, o gh e o agente SSH do host', () => {
+test('inherits the host git configuration, gh and SSH agent', () => {
   const home = mkdtempSync(join(tmpdir(), 'lab-host-'))
   try {
     mkdirSync(join(home, '.config', 'gh'), { recursive: true })
@@ -50,11 +50,11 @@ test('herda a configuração do git, o gh e o agente SSH do host', () => {
   }
 })
 
-test('acesso pela rede exige o token e guarda o cookie', { timeout: 15_000 }, async t => {
+test('network access requires the token and stores the cookie', { timeout: 15_000 }, async t => {
   const historyDir = mkdtempSync(join(tmpdir(), 'lab-remote-test-'))
   t.after(() => rmSync(historyDir, { recursive: true, force: true }))
   const child = spawn(process.execPath, ['lab-switch.mjs', '--demo', '--port', '0', '--listen', '127.0.0.2', '--history-dir', join(historyDir, 'history')], {
-    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, LAB_TOKEN: 'token-de-teste-com-tamanho-suficiente' },
+    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, LAB_TOKEN: 'test-token-with-sufficient-length' },
   })
   t.after(() => { child.kill('SIGTERM') })
   const [raw] = await once(child.stdout, 'data')
@@ -62,7 +62,7 @@ test('acesso pela rede exige o token e guarda o cookie', { timeout: 15_000 }, as
   assert.ok(link)
   const base = new URL(link).origin
   assert.equal((await fetch(base + '/')).status, 401)
-  assert.equal((await fetch(base + '/?token=errado', { redirect: 'manual' })).status, 401)
+  assert.equal((await fetch(base + '/?token=wrong', { redirect: 'manual' })).status, 401)
   const login = await fetch(link, { redirect: 'manual' })
   assert.equal(login.status, 302)
   const cookie = login.headers.get('set-cookie').split(';')[0]
@@ -80,7 +80,7 @@ test('acesso pela rede exige o token e guarda o cookie', { timeout: 15_000 }, as
   allowed.terminate()
 })
 
-test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 25_000 }, async t => {
+test('two PTYs receive the same input once and return to the prompt', { timeout: 25_000 }, async t => {
   const historyDir = mkdtempSync(join(tmpdir(), 'lab-history-test-'))
   t.after(() => rmSync(historyDir, { recursive: true, force: true }))
   const child = spawn(process.execPath, ['lab-switch.mjs', '--demo', '--port', '0', '--history-dir', historyDir], {
@@ -107,7 +107,7 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
       await new Promise(resolve => setTimeout(resolve, 30))
     }
     const notice = events.findLast(event => event.type === 'notice')
-    assert.fail('Estado esperado ausente. ' + JSON.stringify(notice ?? events.at(-1)))
+    assert.fail('Expected state missing. ' + JSON.stringify(notice ?? events.at(-1)))
   }
   const state = () => events.findLast(e => e.type === 'state')
   const ready = () => state()?.lanes.with.status === 'ready' && state().lanes.without.status === 'ready'
@@ -117,17 +117,17 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   socket.send(JSON.stringify({ type: 'input', lane: 'with', data: '\x1b[O' }))
   socket.send(JSON.stringify({ type: 'input', lane: 'without', data: '\x1b[I' }))
   socket.send(JSON.stringify({ type: 'input', lane: 'without', data: '\x1b[O' }))
-  socket.send(JSON.stringify({ type: 'send', text: 'Primeira linha\nSegunda linha' }))
+  socket.send(JSON.stringify({ type: 'send', text: 'First line\nSecond line' }))
   await waitFor(() => events.some(e => e.type === 'sent'))
-  await waitFor(() => output('with').includes('Entrada recebida') && output('without').includes('Entrada recebida'))
+  await waitFor(() => output('with').includes('Input received') && output('without').includes('Input received'))
   for (const lane of ['with', 'without']) {
-    assert.match(output(lane).replace(/\r/g, ''), /Primeira linha\nSegunda linha/)
-    assert.equal(output(lane).split('Entrada recebida').length, 2)
+    assert.match(output(lane).replace(/\r/g, ''), /First line\nSecond line/)
+    assert.equal(output(lane).split('Input received').length, 2)
   }
   await waitFor(ready)
   await waitFor(() => events.some(e => e.type === 'history-entry' && e.entry.status === 'complete'))
   const saved = events.find(e => e.type === 'history-entry' && e.entry.status === 'complete').entry
-  assert.equal(saved.prompt, 'Primeira linha\nSegunda linha')
+  assert.equal(saved.prompt, 'First line\nSecond line')
   assert.equal(saved.source, 'demo')
   assert.equal(saved.sides.with.input, 31)
   assert.equal(saved.sides.without.input, 31)
@@ -136,12 +136,12 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   assert.deepEqual(await historyStore(historyDir).read(saved.id), saved)
   socket.send(JSON.stringify({ type: 'history-open', id: saved.id }))
   await waitFor(() => events.some(e => e.type === 'history-open' && e.entry.id === saved.id))
-  socket.send(JSON.stringify({ type: 'send', text: 'suba o servidor' }))
+  socket.send(JSON.stringify({ type: 'send', text: 'start the server' }))
   await waitFor(() => state()?.lanes.with.preview && state()?.lanes.without.preview)
   assert.equal(state().lanes.with.preview, 'http://127.0.0.1:5173/')
   assert.equal(state().lanes.without.preview, 'http://127.0.0.1:5174/')
   await waitFor(ready)
-  const printed = () => events.findLast(e => e.type === 'history-entry' && e.entry.prompt === 'suba o servidor' && e.entry.sides.with?.print && e.entry.sides.without?.print)
+  const printed = () => events.findLast(e => e.type === 'history-entry' && e.entry.prompt === 'start the server' && e.entry.sides.with?.print && e.entry.sides.without?.print)
   await waitFor(printed, 300)
   const printEntry = printed().entry
   assert.equal(printEntry.sides.with.print.url, 'http://127.0.0.1:5173/')
@@ -152,19 +152,19 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   socket.send(JSON.stringify({ type: 'stop' }))
   await waitFor(() => state()?.lanes.with.status === 'stopped' && state().lanes.without.status === 'stopped')
   const before = events.filter(e => e.type === 'data').length
-  socket.send(JSON.stringify({ type: 'send', text: 'não enviar com terminal encerrado' }))
+  socket.send(JSON.stringify({ type: 'send', text: 'do not send with terminal stopped' }))
   await waitFor(() => events.some(e => e.type === 'notice'))
   assert.equal(events.filter(e => e.type === 'data').length, before)
 })
 
-test('agrupa uso pela requisição nativa e guarda só a resposta visível', () => {
+test('groups usage by native request and keeps only the visible answer', () => {
   const usage = { input_tokens: 10, cache_read_input_tokens: 12, cache_creation_input_tokens: 3, output_tokens: 2 }
   const text = [
-    { type: 'user', permissionMode: 'auto', message: { content: 'Tarefa de teste' } },
+    { type: 'user', permissionMode: 'auto', message: { content: 'Test task' } },
     { type: 'assistant', requestId: 'one', message: { usage, content: [{ type: 'tool_use', name: 'Bash', id: 'call-one' }] } },
-    { type: 'assistant', requestId: 'one', message: { usage, content: [{ type: 'thinking', thinking: 'não persistir' }] } },
-    { type: 'user', message: { content: [{ type: 'tool_result', is_error: true, content: 'saída interna' }] } },
-    { type: 'assistant', requestId: 'two', message: { model: 'demo', usage, content: [{ type: 'text', text: 'Resposta visível' }] } },
+    { type: 'assistant', requestId: 'one', message: { usage, content: [{ type: 'thinking', thinking: 'do not persist' }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', is_error: true, content: 'internal output' }] } },
+    { type: 'assistant', requestId: 'two', message: { model: 'demo', usage, content: [{ type: 'text', text: 'Visible answer' }] } },
     { type: 'system', subtype: 'turn_duration', durationMs: 820 },
   ].map(row => JSON.stringify(row)).join('\n')
   const [turn] = readClaudeTurns(text)
@@ -176,5 +176,5 @@ test('agrupa uso pela requisição nativa e guarda só a resposta visível', () 
   assert.equal(summary.toolErrors, 1)
   assert.equal(summary.permissionMode, 'auto')
   assert.equal(summary.durationMs, 820)
-  assert.equal(summary.answer, 'Resposta visível')
+  assert.equal(summary.answer, 'Visible answer')
 })

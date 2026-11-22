@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 const withItem = process.argv[2] === 'with'
-const rows = readFileSync('rotina.tsv', 'utf8').trim().split('\n').slice(1)
-const finished = rows.filter(row => row.endsWith('\tfeito'))
+const rows = readFileSync('routine.tsv', 'utf8').trim().split('\n').slice(1)
+const finished = rows.filter(row => row.endsWith('\tdone'))
 const last = finished.at(-1)?.split('\t')[0]
 const journal = join(process.env.CLAUDE_CONFIG_DIR, 'projects', 'demo')
 mkdirSync(journal, { recursive: true })
@@ -12,8 +12,8 @@ const transcript = join(journal, process.argv[3] + '.jsonl')
 process.stdin.setRawMode(true)
 process.stdin.setEncoding('utf8')
 process.stdout.write('\x1b[?2004h\x1b[1m' +
-  (withItem ? 'Terminal experimental' : 'Terminal de controle') +
-  '\x1b[0m\r\nDemonstração de PTY\r\n\r\n❯ ')
+  (withItem ? 'Experimental terminal' : 'Control terminal') +
+  '\x1b[0m\r\nPTY demo\r\n\r\n❯ ')
 let input = ''
 let readyTimer
 process.stdin.on('data', data => {
@@ -25,13 +25,13 @@ process.stdin.on('data', data => {
       continue
     }
     process.stdout.write(input.replaceAll('\n', '\r\n') + '\r\n\r\n')
-    process.stdout.write('Entrada recebida nesta sessão.\r\n')
-    let answer = 'Entrada recebida nesta sessão.'
-    if (input.includes('servidor')) {
+    process.stdout.write('Input received in this session.\r\n')
+    let answer = 'Input received in this session.'
+    if (input.includes('server')) {
       process.stdout.write('  \x1b[32m➜\x1b[39m  Local:   \x1b[36mhttp://localhost:\x1b[1m' + (withItem ? 5173 : 5174) + '\x1b[22m/\x1b[39m\r\n')
     }
-    if (input.includes('rotina.tsv')) {
-      answer = finished.length + ' tarefas concluídas. Última: ' + last + '.'
+    if (input.includes('routine.tsv')) {
+      answer = finished.length + ' tasks done. Last: ' + last + '.'
       process.stdout.write(answer + '\r\n')
     }
     const records = [

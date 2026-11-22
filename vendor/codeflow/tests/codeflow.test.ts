@@ -14,7 +14,7 @@ const usage = {
 
 const completion = {
   turnId: 't1',
-  answer: 'Resposta original',
+  answer: 'Original answer',
   durationMs: 1000,
   isAborted: false,
   reason: 'answer' as const,
@@ -23,7 +23,7 @@ const completion = {
 
 const start = { surface: 'terminal' as const, isInteractive: true, cwd: '/work' }
 const command = { command: 'codeflow', origin: { kind: 'composer' as const }, presentation: { isFullscreen: true, columns: 120 } }
-const nativeSection = { id: 'intro', text: 'Prompt nativo', scope: 'shared' as const }
+const nativeSection = { id: 'intro', text: 'Native prompt', scope: 'shared' as const }
 const compose = {
   model: 'test-model', promptModel: 'test-model', surfaces: ['terminal'] as const,
   tools: [], outputStyle: null, traits: [],
@@ -45,30 +45,30 @@ function mockSession(on: On, variables: Record<string, string> = {}) {
   return clock
 }
 
-test('toggle passivo por padrão, ativo só com opt-in', () => {
+test('toggle is passive by default, active only with opt-in', () => {
   expect(resolveToggle(undefined)).toEqual({ enabled: false, invalid: false })
   expect(resolveToggle('0')).toEqual({ enabled: false, invalid: false })
   expect(resolveToggle('1')).toEqual({ enabled: true, invalid: false })
-  expect(resolveToggle('inválido')).toEqual({ enabled: false, invalid: true })
+  expect(resolveToggle('invalid')).toEqual({ enabled: false, invalid: true })
 })
 
-test('modo passivo preserva as seções nativas e conta as ferramentas', async ($, on) => {
+test('passive mode preserves native sections and counts tools', async ($, on) => {
   mockSession(on)
   on('tool.call', () => ({ result: 'ok' }))
   await $.session.start(start)
   expect((await $.prompt.compose(compose)).sections).toEqual([nativeSection])
-  await $.turn.start({ text: 'consulta', turnId: 't1' })
+  await $.turn.start({ text: 'query', turnId: 't1' })
   await $.tool.call({ tool: 'Bash', command: 'printf ok' })
-  await $.turn.start({ text: 'subagente', turnId: 'child', agentId: 'a1' })
+  await $.turn.start({ text: 'subagent', turnId: 'child', agentId: 'a1' })
   await $.turn.complete({ ...completion, turnId: 'child', agentId: 'a1' })
   const ended = await $.turn.complete(completion)
-  expect(ended.text).toContain('1 chamada(s)')
-  expect(ended.text).toContain('entrada nova 100')
-  expect(ended.text).toContain('entrada total 175')
-  expect(ended.text).toContain('contexto 6%')
+  expect(ended.text).toContain('1 call(s)')
+  expect(ended.text).toContain('new input 100')
+  expect(ended.text).toContain('total input 175')
+  expect(ended.text).toContain('context 6%')
 })
 
-test('modo ativo acrescenta uma seção session ao prompt', async ($, on) => {
+test('active mode adds a session section to the prompt', async ($, on) => {
   mockSession(on, { CLAUDE_CODEFLOW_ENABLED: '1' })
   await $.session.start(start)
   const composed = await $.prompt.compose(compose)
@@ -78,48 +78,48 @@ test('modo ativo acrescenta uma seção session ao prompt', async ($, on) => {
   expect(composed.sections).toHaveLength(2)
 })
 
-test('guarda mantém a decisão e a razão originais de deny e ask', () => {
+test('guard keeps the original deny and ask decision and reason', () => {
   for (const decision of ['deny', 'ask'] as const) {
-    const native = { decision, reason: 'regra nativa' }
-    expect(applyGuard(native, { command: 'sinalizador' }, ['sinalizador'])).toEqual(native)
+    const native = { decision, reason: 'native rule' }
+    expect(applyGuard(native, { command: 'flagger' }, ['flagger'])).toEqual(native)
   }
 })
 
-test('guarda via tool.check lê o input e preserva o deny', { options: { guardPatterns: 'sinalizador' } }, async ($, on) => {
+test('guard via tool.check reads the input and preserves deny', { options: { guardPatterns: 'flagger' } }, async ($, on) => {
   mockSession(on, { CLAUDE_CODEFLOW_ENABLED: '1' })
   on('tool.check', ($, e) => {
     const input = e.input as { command?: string }
-    return input.command?.includes('bloqueado')
-      ? { decision: 'deny', reason: 'regra nativa' }
+    return input.command?.includes('blocked')
+      ? { decision: 'deny', reason: 'native rule' }
       : { decision: 'allow' }
   })
   await $.session.start(start)
-  const denied = await $.tool.check({ tool: 'Bash', input: { command: 'printf "sinalizador bloqueado"' } })
+  const denied = await $.tool.check({ tool: 'Bash', input: { command: 'printf "flagger blocked"' } })
   expect(denied.decision).toBe('deny')
-  expect(denied.reason).toBe('regra nativa')
-  const flagged = await $.tool.check({ tool: 'Bash', input: { command: 'printf sinalizador' } })
+  expect(denied.reason).toBe('native rule')
+  const flagged = await $.tool.check({ tool: 'Bash', input: { command: 'printf flagger' } })
   expect(flagged.decision).toBe('ask')
   const plain = await $.tool.check({ tool: 'Bash', input: { command: 'printf ok' } })
   expect(plain.decision).toBe('allow')
-  const script = await $.tool.check({ tool: 'REPL', input: { code: '"sinalizador"' } })
+  const script = await $.tool.check({ tool: 'REPL', input: { code: '"flagger"' } })
   expect(script.decision).toBe('ask')
 })
 
-test('guarda é passiva quando o modo ativo está desligado', { options: { guardPatterns: 'sinalizador' } }, async ($, on) => {
+test('guard is passive when active mode is off', { options: { guardPatterns: 'flagger' } }, async ($, on) => {
   mockSession(on)
   on('tool.check', () => ({ decision: 'allow' }))
   await $.session.start(start)
-  const result = await $.tool.check({ tool: 'Bash', input: { command: 'printf sinalizador' } })
+  const result = await $.tool.check({ tool: 'Bash', input: { command: 'printf flagger' } })
   expect(result.decision).toBe('allow')
 })
 
-test('saída vai inteira à ferramenta e só o texto de leitura elegível no transcript é reduzido',
+test('output goes whole to the tool and only eligible read text in the transcript is reduced',
   { options: { maxFileLines: 2, maxToolResultChars: 120 } }, async ($, on) => {
     mockSession(on, { CLAUDE_CODEFLOW_ENABLED: '1' })
-    const raw = ['linha 1', 'linha 2', 'texto de fixture '.repeat(100)].join('\n')
+    const raw = ['line 1', 'line 2', 'fixture text '.repeat(100)].join('\n')
     on('tool.call', ($, e) => e.tool_use_id === 'failed1' ? { result: raw, isError: true } : { result: raw })
     await $.session.start(start)
-    await $.turn.start({ text: 'ler', turnId: 't1' })
+    await $.turn.start({ text: 'read', turnId: 't1' })
     const read = await $.tool.call({ tool: 'Read', file_path: '/work/example.txt', tool_use_id: 'read1' })
     expect(read.result).toBe(raw)
     const readRow = await $.session.append({
@@ -150,37 +150,37 @@ test('saída vai inteira à ferramenta e só o texto de leitura elegível no tra
     expect(parts.message?.content[0]?.content).toEqual([{ type: 'text', text: shortened }])
   })
 
-test('contagem de pensamento guarda apenas contadores', () => {
+test('thinking count keeps only counters', () => {
   const session = newSessionTelemetry()
   session.current = newTurnTelemetry('t1', 0)
-  observeThinkingBlock(session, 'fixture privada somente para contagem')
+  observeThinkingBlock(session, 'private fixture for counting only')
   expect(session.current?.thinking).toEqual({ blocks: 1, words: 5 })
-  expect(JSON.stringify(session)).not.toContain('fixture privada')
+  expect(JSON.stringify(session)).not.toContain('private fixture')
 })
 
-test('stash exige valor explícito e expira na sessão', async ($, on) => {
+test('stash requires an explicit value and expires in the session', async ($, on) => {
   const clock = mockSession(on, { CLAUDE_CODEFLOW_ENABLED: '1' })
   await $.session.start(start)
-  expect((await $.command.run({ ...command, args: 'stash contagem' })).text).toContain('até 2.000')
-  await $.command.run({ ...command, args: 'stash contagem 42 linhas' })
-  expect((await $.command.run({ ...command, args: 'recall contagem' })).text).toBe('42 linhas')
+  expect((await $.command.run({ ...command, args: 'stash counter' })).text).toContain('up to 2,000')
+  await $.command.run({ ...command, args: 'stash counter 42 lines' })
+  expect((await $.command.run({ ...command, args: 'recall counter' })).text).toBe('42 lines')
   await clock.advance(30 * 60 * 1000)
-  expect((await $.command.run({ ...command, args: 'recall contagem' })).text).toContain('expirada')
+  expect((await $.command.run({ ...command, args: 'recall counter' })).text).toContain('expired')
 })
 
-test('registry e disco ficam fora do caminho padrão', async ($, on) => {
+test('registry and disk stay off the default path', async ($, on) => {
   mockSession(on)
   let writes = 0
   on('store.set', () => { writes += 1; return { value: undefined } })
   on('fs.write', () => { writes += 1; return { value: undefined } })
   await $.session.start(start)
-  await $.turn.start({ text: 'consulta', turnId: 't1' })
+  await $.turn.start({ text: 'query', turnId: 't1' })
   await $.turn.complete(completion)
   await $.session.end({ reason: 'other', sessionId: 's1', resume: { id: 's1' } })
   expect(writes).toBe(0)
 })
 
-test('relatório acessa somente o experimento escolhido e limpa ao trocar a sessão', async ($, on) => {
+test('report reads only the chosen experiment and clears when the session changes', async ($, on) => {
   mockSession(on, { CLAUDE_CODEFLOW_RUN: 'slice-a' })
   const seed = { sessionId: 'unrelated', savedAtMs: 0, enabled: true, turns: [], peakContextPercent: null }
   const keys: string[] = []
@@ -189,17 +189,17 @@ test('relatório acessa somente o experimento escolhido e limpa ao trocar a sess
   on('store.get', ($, e) => { keys.push(e.key); return { value: values.get(e.key) } })
   on('store.set', ($, e) => { values.set(e.key, e.value); return { value: undefined } })
   await $.session.start(start)
-  await $.turn.start({ text: 'consulta', turnId: 't1' })
+  await $.turn.start({ text: 'query', turnId: 't1' })
   await $.turn.complete(completion)
   await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
   const report = await $.command.run({ ...command, args: 'report' })
   expect(keys.some(key => key.startsWith('codeflow:v2:slice-b:'))).toBe(false)
-  expect(report.text).toContain('Experimento slice-a')
-  expect(report.text).toContain('Passivo (1 sessões)')
-  expect(report.text).toContain('Sessão atual · 0/0')
+  expect(report.text).toContain('Experiment slice-a')
+  expect(report.text).toContain('Passive (1 session(s))')
+  expect(report.text).toContain('Current session · 0/0')
 })
 
-test('tokens ausentes permanecem indisponíveis', () => {
+test('missing tokens stay unavailable', () => {
   const first = newTurnTelemetry('t1', 0)
   first.usage = { input: 100, cacheRead: 70, cacheCreation: 5, output: 20 }
   const second = newTurnTelemetry('t2', 0)
@@ -207,7 +207,7 @@ test('tokens ausentes permanecem indisponíveis', () => {
   expect(sumUsage([first, second])?.input).toBe(null)
 })
 
-test('conta agrupamento a partir das ferramentas propostas na etapa', async ($, on) => {
+test('counts grouping from the tools proposed in the step', async ($, on) => {
   mockSession(on)
   on('turn.step', async function* ($, e) {
     return {
@@ -216,10 +216,10 @@ test('conta agrupamento a partir das ferramentas propostas na etapa', async ($, 
     }
   })
   await $.session.start(start)
-  await $.turn.start({ text: 'consulta', turnId: 't1' })
+  await $.turn.start({ text: 'query', turnId: 't1' })
   for await (const chunk of $.turn.step({ turnId: 't1', index: 0, model: 'test-model', messageCount: 1 })) {
     void chunk
   }
   const ended = await $.turn.complete(completion)
-  expect(ended.text).toContain('1 requisição(ões) com múltiplas ferramentas')
+  expect(ended.text).toContain('1 request(s) with multiple tools')
 })

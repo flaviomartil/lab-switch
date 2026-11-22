@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,70 +15,70 @@
     <div class="bar-inner">
       <div class="brand"><span class="brand-mark" aria-hidden="true">↔</span> Lab Switch</div>
       <div class="actions">
-        <span class="connection" id="connection"><i></i><span>Conectando</span></span>
-        <button type="button" id="restart" class="secondary" disabled>Novo par</button>
-        <button type="button" id="stop" class="quiet" disabled>Encerrar</button>
+        <span class="connection" id="connection"><i></i><span>Connecting</span></span>
+        <button type="button" id="restart" class="secondary" disabled>New pair</button>
+        <button type="button" id="stop" class="quiet" disabled>Stop</button>
       </div>
     </div>
   </header>
   <main class="workbench">
     <section class="intro" aria-labelledby="title">
       <div>
-        <h1 id="title">Um prompt, <em>dois Claudes.</em></h1>
-        <p id="subtitle">Compare duas sessões isoladas com a mesma entrada.</p>
+        <h1 id="title">One prompt, <em>two Claudes.</em></h1>
+        <p id="subtitle">Compare two isolated sessions with the same input.</p>
       </div>
       <img class="illustration" src="/compare.svg" alt="" width="126" height="82">
     </section>
 
     <div class="runline">
-      <span id="item-summary">Preparando a comparação</span>
+      <span id="item-summary">Preparing the comparison</span>
       <span id="project-summary"></span>
     </div>
-    <section class="pair" aria-label="Terminais da comparação">
+    <section class="pair" aria-label="Comparison terminals">
       <article class="lane lane-with" aria-labelledby="with-heading">
         <div class="lane-top">
-          <div><h2 id="with-heading">Com item</h2><p id="with-mode">Experimental</p></div>
-          <span id="with-status" class="pill" data-state="starting">Iniciando</span>
+          <div><h2 id="with-heading">With item</h2><p id="with-mode">Experimental</p></div>
+          <span id="with-status" class="pill" data-state="starting">Starting</span>
         </div>
-        <div class="surface"><div id="with-terminal" class="terminal" aria-label="Terminal experimental"></div></div>
+        <div class="surface"><div id="with-terminal" class="terminal" aria-label="Experimental terminal"></div></div>
       </article>
       <article class="lane lane-without" aria-labelledby="without-heading">
         <div class="lane-top">
-          <div><h2 id="without-heading">Sem item</h2><p id="without-mode">Controle</p></div>
-          <span id="without-status" class="pill" data-state="starting">Iniciando</span>
+          <div><h2 id="without-heading">Without item</h2><p id="without-mode">Control</p></div>
+          <span id="without-status" class="pill" data-state="starting">Starting</span>
         </div>
-        <div class="surface"><div id="without-terminal" class="terminal" aria-label="Terminal de controle"></div></div>
+        <div class="surface"><div id="without-terminal" class="terminal" aria-label="Control terminal"></div></div>
       </article>
     </section>
 
     <form class="composer" id="composer">
       <div class="composer-head">
-        <label for="prompt">Prompt compartilhado</label>
-        <button id="example" class="example" type="button" hidden>Usar exemplo</button>
+        <label for="prompt">Shared prompt</label>
+        <button id="example" class="example" type="button" hidden>Use example</button>
       </div>
-      <textarea id="prompt" rows="2" maxlength="12000" placeholder="Escreva o prompt que vai para os dois terminais…"></textarea>
+      <textarea id="prompt" rows="2" maxlength="12000" placeholder="Write the prompt that goes to both terminals…"></textarea>
       <div class="composer-foot">
-        <p id="hint" role="status">Aguardando conexão com o laboratório local.</p>
-        <button id="send" class="primary" type="submit" disabled>Enviar aos dois <span aria-hidden="true">↗</span></button>
+        <p id="hint" role="status">Waiting for connection to the local lab.</p>
+        <button id="send" class="primary" type="submit" disabled>Send to both <span aria-hidden="true">↗</span></button>
       </div>
     </form>
 
     <section class="lab" aria-labelledby="lab-title">
       <div class="lab-head">
-        <h2 id="lab-title">Rodadas</h2>
-        <div class="tabs" role="tablist" aria-label="Visão da rodada">
-          <button type="button" role="tab" id="tab-compare" aria-controls="history-detail" aria-selected="true">Comparação</button>
+        <h2 id="lab-title">Rounds</h2>
+        <div class="tabs" role="tablist" aria-label="Round view">
+          <button type="button" role="tab" id="tab-compare" aria-controls="history-detail" aria-selected="true">Comparison</button>
           <button type="button" role="tab" id="tab-preview" aria-controls="preview" aria-selected="false">Preview</button>
         </div>
       </div>
       <div class="lab-body">
-        <nav id="history-list" aria-label="Rodadas salvas"></nav>
+        <nav id="history-list" aria-label="Saved rounds"></nav>
         <div class="lab-view">
           <div id="history-detail" role="tabpanel" aria-labelledby="tab-compare" aria-live="polite"></div>
           <div id="preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
             <div class="preview-pair">
-              <figure class="preview-lane" data-lane="with"><figcaption><span><span id="with-preview-label">Com item</span> <span class="owner" id="with-preview-owner"></span></span><span class="preview-tools"><a id="with-preview-link" target="_blank" rel="noopener" hidden>Abrir</a><button type="button" class="link" data-reload="with" hidden>Recarregar</button></span></figcaption><div class="preview-frame" id="with-preview"></div></figure>
-              <figure class="preview-lane" data-lane="without"><figcaption><span><span id="without-preview-label">Sem item</span> <span class="owner" id="without-preview-owner"></span></span><span class="preview-tools"><a id="without-preview-link" target="_blank" rel="noopener" hidden>Abrir</a><button type="button" class="link" data-reload="without" hidden>Recarregar</button></span></figcaption><div class="preview-frame" id="without-preview"></div></figure>
+              <figure class="preview-lane" data-lane="with"><figcaption><span><span id="with-preview-label">With item</span> <span class="owner" id="with-preview-owner"></span></span><span class="preview-tools"><a id="with-preview-link" target="_blank" rel="noopener" hidden>Open</a><button type="button" class="link" data-reload="with" hidden>Reload</button></span></figcaption><div class="preview-frame" id="with-preview"></div></figure>
+              <figure class="preview-lane" data-lane="without"><figcaption><span><span id="without-preview-label">Without item</span> <span class="owner" id="without-preview-owner"></span></span><span class="preview-tools"><a id="without-preview-link" target="_blank" rel="noopener" hidden>Open</a><button type="button" class="link" data-reload="without" hidden>Reload</button></span></figcaption><div class="preview-frame" id="without-preview"></div></figure>
             </div>
           </div>
         </div>

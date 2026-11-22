@@ -1,11 +1,11 @@
 /**
- * Guarda de comandos sensíveis.
+ * Guard for sensitive commands.
  *
- * Falha corrigida: em modo permissivo, nada pedia aprovação e um `rm` ou
- * `git push` podia rodar escondido em meio a um comando composto
- * (`cd app && git push` chega inteiro ao hook). Aqui cada chamada de shell
- * é varrida por padrões perigosos — em qualquer parte do comando, não só
- * no início — e a decisão vira `ask`, preservando a resposta do operador.
+ * Fixed failure: in permissive mode, nothing asked for approval and an `rm` or
+ * `git push` could run hidden inside a compound command
+ * (`cd app && git push` reaches the hook whole). Here every shell call
+ * is scanned for dangerous patterns, anywhere in the command and not only
+ * at the start, and the decision becomes `ask`, preserving the operator's answer.
  */
 
 export interface GuardDecision {
@@ -13,7 +13,7 @@ export interface GuardDecision {
   ask: boolean
 }
 
-/** Padrões internos. `guardPatterns` do userConfig soma a esta lista. */
+/** Built-in patterns. `guardPatterns` from userConfig is added to this list. */
 export const BUILTIN_PATTERNS = [
   'rm -rf',
   'rm -r ',
@@ -35,7 +35,7 @@ export const BUILTIN_PATTERNS = [
   'npm publish',
   'docker system prune',
   'kubectl delete',
-  // vistos dentro de scripts REPL: saída de rede arbitrária e processos
+  // seen inside REPL scripts: arbitrary network output and processes
   'child_process',
   'process.exit',
   'fetch("http',
@@ -51,15 +51,15 @@ export function parseExtraPatterns(raw: string | undefined | null): string[] {
 }
 
 /**
- * Extrai o texto a varrer de uma chamada de ferramenta e aplica os padrões
- * sensíveis. Tolerante a campos ausentes e a tipos variados — os argumentos
- * chegam como dados congelados de forma variável.
+ * Extracts the text to scan from a tool call and applies the sensitive
+ * patterns. Tolerant of missing fields and varied types, since the arguments
+ * arrive as frozen data of variable shape.
  *
- * Além de Bash, cobre a ferramenta `REPL` do Code Mode nativo: quando o
- * Claude Code está com Code Mode ligado, os scripts JS chegam em `e.code` e
- * o classificador nativo revisa o script inteiro uma vez, sem enxergar
- * valores de runtime — aqui o TEXTO do código é varrido pelos mesmos
- * padrões (git push, rm -rf etc. dentro do script).
+ * Besides Bash, it covers the native Code Mode `REPL` tool: when
+ * Claude Code has Code Mode on, JS scripts arrive in `e.code` and
+ * the native classifier reviews the whole script once, without seeing
+ * runtime values. Here the code TEXT is scanned with the same
+ * patterns (git push, rm -rf, etc. inside the script).
  */
 export function guardToolCall(input: unknown, extraPatterns: string[]): GuardDecision {
   const e = (input ?? {}) as Record<string, unknown>
@@ -84,5 +84,5 @@ export function applyGuard<T extends { decision: 'allow' | 'ask' | 'deny'; reaso
   extraPatterns: string[],
 ): T {
   if (current.decision !== 'allow' || !guardToolCall(input, extraPatterns).ask) return current
-  return { ...current, decision: 'ask', reason: 'Codeflow sinalizou uma operação sensível.' }
+  return { ...current, decision: 'ask', reason: 'Codeflow flagged a sensitive operation.' }
 }

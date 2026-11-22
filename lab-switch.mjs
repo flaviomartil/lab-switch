@@ -50,8 +50,8 @@ const token = remoteListen ? loadToken(join(dirname(historyDirectory), 'token'))
 const gate = access({ listen: config.listen, token })
 const comparisons = new Map()
 const labels = config.telemetryOnly
-  ? { with: 'Com telemetria', without: 'Sem telemetria' }
-  : { with: 'Com ' + title, without: 'Sem ' + title }
+  ? { with: 'With telemetry', without: 'Without telemetry' }
+  : { with: 'With ' + title, without: 'Without ' + title }
 let dimensions = { cols: 74, rows: 19 }
 let run = 0
 let pairId
@@ -63,7 +63,7 @@ let collecting
 function push(socket, payload) {
   if (socket.readyState !== WebSocket.OPEN) return
   if (socket.bufferedAmount > 1_048_576) {
-    socket.close(1013, 'Terminal congestionado')
+    socket.close(1013, 'Terminal congested')
     return
   }
   socket.send(JSON.stringify(payload))
@@ -262,7 +262,7 @@ async function reset() {
   broadcast(status())
   try {
     await stop()
-    if ([...lanes.values()].some(lane => lane.exit === null)) throw new Error('Aguarde os terminais encerrarem.')
+    if ([...lanes.values()].some(lane => lane.exit === null)) throw new Error('Wait for the terminals to exit.')
     if (directory) await rm(directory, { recursive: true, force: true })
     lanes.clear()
     directory = await mkdtemp(join(scratch, 'run-'))
@@ -286,7 +286,7 @@ async function publishHistory(socket) {
     if (socket) push(socket, message)
     else broadcast(message)
   } catch {
-    const message = { type: 'notice', text: 'Não foi possível ler o histórico do Lab.' }
+    const message = { type: 'notice', text: 'Could not read the Lab history.' }
     if (socket) push(socket, message)
     else broadcast(message)
   }
@@ -309,7 +309,7 @@ async function capturePrints(id, pair) {
         prints[lane.id] = { url: lane.preview, owner: lane.previewOwner, capturedAt: new Date().toISOString() }
       }
     } catch (error) {
-      console.error('Print do preview:', error.code ?? error.name)
+      console.error('Preview screenshot:', error.code ?? error.name)
     }
   }
   if (!Object.keys(prints).length) return
@@ -320,7 +320,7 @@ async function capturePrints(id, pair) {
     for (const [lane, print] of Object.entries(prints)) entry.sides[lane] = { ...entry.sides[lane], print }
     await history.write(entry)
     broadcast({ type: 'history-entry', entry })
-  }).catch(error => console.error('Print do preview:', error.code ?? error.name))
+  }).catch(error => console.error('Preview screenshot:', error.code ?? error.name))
   printQueue.set(id, next)
   await next
   if (printQueue.get(id) === next) printQueue.delete(id)
@@ -357,7 +357,7 @@ async function collectPending() {
       if (status === 'complete' || pair.every(lane => lane.exit !== null)) comparisons.delete(record.id)
     }
   } catch (error) {
-    console.error('Histórico:', error.code ?? error.name)
+    console.error('History:', error.code ?? error.name)
   }
 }
 
@@ -386,11 +386,11 @@ function updateSize(cols, rows) {
 async function sendToBoth(socket, input) {
   const text = typeof input === 'string' ? input.replace(/\r\n/g, '\n').trim() : ''
   if (!text || text.length > 12_000 || /[\x00-\x08\x0B-\x1F\x7F-\x9F]/.test(text)) {
-    return push(socket, { type: 'notice', text: 'Use de 1 a 12.000 caracteres de texto.' })
+    return push(socket, { type: 'notice', text: 'Use 1 to 12,000 characters of text.' })
   }
   const pair = ids.map(id => lanes.get(id))
   if (sending || transitioning || pair.some(lane => laneStatus(lane) !== 'ready' || lane.outputPending > 0)) {
-    return push(socket, { type: 'notice', text: 'Os dois terminais precisam estar no campo de prompt.' })
+    return push(socket, { type: 'notice', text: 'Both terminals must be at the prompt field.' })
   }
   sending = true
   for (const lane of pair) submitLane(lane)
@@ -398,7 +398,7 @@ async function sendToBoth(socket, input) {
   try {
     for (const lane of pair) lane.process.write('\x1b[200~' + text + '\x1b[201~')
     await delay(70)
-    if (pair.some(lane => lane.exit !== null || lane.stopping)) throw new Error('Um terminal encerrou antes do envio.')
+    if (pair.some(lane => lane.exit !== null || lane.stopping)) throw new Error('A terminal exited before sending.')
     const after = Date.now()
     const record = {
       id: randomUUID(), pairId, startedAt: new Date(after).toISOString(), prompt: text,
@@ -412,11 +412,11 @@ async function sendToBoth(socket, input) {
       broadcast({ type: 'history-entry', entry: record })
       await publishHistory()
     } catch {
-      push(socket, { type: 'notice', text: 'O prompt foi enviado. Falhou a gravação inicial do histórico.' })
+      push(socket, { type: 'notice', text: 'The prompt was sent. Saving the initial history entry failed.' })
     }
     comparisons.set(record.id, { record, pair, after })
   } catch (error) {
-    push(socket, { type: 'notice', text: 'Falha ao enviar. Confira os terminais. ' + error.message })
+    push(socket, { type: 'notice', text: 'Failed to send. Check the terminals. ' + error.message })
   } finally {
     sending = false
     broadcast(status())
@@ -452,7 +452,7 @@ const server = createServer(async (request, response) => {
   if (gate.login(request, response)) return
   if (!gate.authorized(request)) {
     response.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' })
-      .end('Abra o link com token que o Lab Switch imprimiu ao iniciar.')
+      .end('Open the token link that Lab Switch printed on startup.')
     return
   }
   const printRoute = request.method === 'GET' && request.url.split('?')[0].match(/^\/history-print\/([0-9a-f-]{36})\/(with|without)\.png$/)
@@ -494,7 +494,7 @@ sockets.on('connection', socket => {
     previewPorts: gate.remote ? { with: server.address().port + 1, without: server.address().port + 2 } : null,
     bypassPermissions: !config.demo,
     labels, telemetryOnly: config.telemetryOnly,
-    project: config.projectName, model: config.model, sample: config.projectName === 'Projeto de exemplo',
+    project: config.projectName, model: config.model, sample: config.projectName === 'Sample project',
   })
   push(socket, { type: 'reset', run })
   for (const lane of lanes.values()) {

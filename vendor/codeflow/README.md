@@ -1,56 +1,56 @@
 # Codeflow 1.1.1
 
-Mod para Claude Code que mede o turno principal e oferece uma opção para reduzir a saída de leituras e buscas que chega ao contexto. Funciona em sessões normais e pode acompanhar o [Code Mode nativo](https://code.claude.com/docs/en/code-mode).
+Claude Code mod that measures the main turn and offers an option to reduce the output of reads and searches that reaches the context. It works in normal sessions and can run alongside the [native Code Mode](https://code.claude.com/docs/en/code-mode).
 
-## Abrir uma sessão
+## Open a session
 
 ```bash
 claude --plugin-dir ./codeflow
 CLAUDE_CODEFLOW_ENABLED=1 claude --plugin-dir ./codeflow
 ```
 
-O primeiro comando abre no **modo passivo**, que coleta telemetria. O segundo abre no **modo ativo**, que acrescenta orientação ao prompt, reduz resultados elegíveis de `Read`, `Grep` e `Glob` e sinaliza padrões sensíveis em `Bash` e `REPL`. A variável é lida do ambiente ao iniciar. Ausência, valor inválido ou `0` mantém o modo passivo.
+The first command opens in **passive mode**, which collects telemetry. The second opens in **active mode**, which adds guidance to the prompt, reduces eligible `Read`, `Grep` and `Glob` results and flags sensitive patterns in `Bash` and `REPL`. The variable is read from the environment at startup. A missing value, an invalid value or `0` keeps passive mode.
 
-A redução se aplica à representação textual de resultados bem-sucedidos no transcript. A resposta entregue ao executor permanece inteira. Saídas de shell, testes, efeitos de escrita e resultados que contenham mídia ficam fora dessa redução. Se precisar de conteúdo omitido, refaça a leitura com um intervalo ou refine a busca.
+The reduction applies to the text representation of successful results in the transcript. The response delivered to the executor stays whole. Shell output, tests, write effects and results that contain media are excluded from this reduction. If you need omitted content, repeat the read with a range or refine the search.
 
-A guarda sinaliza operações por padrões literais e preserva as recusas e pedidos de aprovação existentes. Use as regras nativas `ask` e `deny` para as operações que precisam de controle. Confira o código do executor nativo com `Ctrl+O`. [Permissões no Code Mode](https://code.claude.com/docs/en/code-mode#permission-checks)
+The guard flags operations by literal patterns and preserves existing refusals and approval requests. Use the native `ask` and `deny` rules for the operations that need control. Check the native executor code with `Ctrl+O`. [Permissions in Code Mode](https://code.claude.com/docs/en/code-mode#permission-checks)
 
-## Comandos
+## Commands
 
-| Comando | Resultado |
+| Command | Result |
 | --- | --- |
-| `/codeflow` | Estado do modo |
-| `/codeflow report` | Requisições, chamadas, tokens, tempo, contexto e custo estimado quando disponíveis |
-| `/codeflow pensamento` | Contagem de blocos e palavras no último turno, com a opção `thinking` habilitada |
-| `/codeflow stash <nome> <texto>` | Guarda texto escolhido no terminal em memória por até 30 minutos, no modo ativo |
-| `/codeflow recall <nome>` | Mostra o valor guardado |
-| `/codeflow forget <nome>` | Remove a entrada |
+| `/codeflow` | Mode status |
+| `/codeflow report` | Requests, calls, tokens, time, context and estimated cost when available |
+| `/codeflow thinking` | Block and word counts for the last turn, with the `thinking` option enabled |
+| `/codeflow stash <name> <text>` | Keeps text chosen in the terminal in memory for up to 30 minutes, in active mode |
+| `/codeflow recall <name>` | Shows the stored value |
+| `/codeflow forget <name>` | Removes the entry |
 
-O stash aceita até 20 entradas de até 2.000 caracteres. Ele é limpo ao encerrar ou limpar a sessão. O texto digitado em comandos pode aparecer no histórico da sessão do Claude.
+The stash accepts up to 20 entries of up to 2,000 characters each. It is cleared when the session ends or is cleared. Text typed in commands may appear in the Claude session history.
 
-## Medição e armazenamento
+## Measurement and storage
 
-A contagem de eventos é a mesma nos dois modos. Entrada total soma entrada sem cache, cache lido e cache criado. A contagem de requisições com múltiplas ferramentas usa a resposta da etapa do modelo. Os relatórios exibem a duração de turnos concluídos e mostram o total de turnos observados. Campos indisponíveis aparecem como tal.
+Event counting is the same in both modes. Total input adds uncached input, cache read and cache created. The request count for requests with multiple tools uses the model step response. Reports show the duration of completed turns and the total number of turns observed. Unavailable fields appear as such.
 
-Por padrão, a coleta fica em memória. Defina `CLAUDE_CODEFLOW_RUN` se quiser agrupar sessões para uma comparação. O registro usa uma chave por sessão e inclui somente dados de telemetria. O relatório usa sessões encerradas nas últimas 24 horas com o mesmo ID de experimento. Veja o [procedimento A/B](docs/teste-hibrido-ab.md).
+By default, collection stays in memory. Set `CLAUDE_CODEFLOW_RUN` if you want to group sessions for a comparison. The record uses one key per session and includes only telemetry data. The report uses sessions that ended in the last 24 hours with the same experiment ID. See the [A/B procedure](docs/hybrid-ab-test.md).
 
-As opções abaixo ficam na configuração do plugin.
+The options below live in the plugin configuration.
 
-| Opção | Padrão |
+| Option | Default |
 | --- | --- |
 | `maxFileLines` | 200 |
-| `maxToolResultChars` | 2.000. Valores abaixo de 64 usam o padrão. |
+| `maxToolResultChars` | 2,000. Values below 64 use the default. |
 | `maxListItems` | 20 |
-| `guardPatterns` | Vazio. Padrões adicionais separados por vírgula. |
-| `turnSummary` | Ligado |
-| `thinking` | Desligado. Quando ativo guarda contagens. |
-| `sessionLog` | Desligado. Quando ativo grava um resumo em `.codeflow/session-<id>.ndjson` ao sair. |
+| `guardPatterns` | Empty. Additional comma-separated patterns. |
+| `turnSummary` | On |
+| `thinking` | Off. When on, it keeps counts. |
+| `sessionLog` | Off. When on, it writes a summary to `.codeflow/session-<id>.ndjson` on exit. |
 
-## Validar o pacote local
+## Validate the local package
 
 ```bash
 claude plugin validate ./codeflow
 claude plugin test ./codeflow
 ```
 
-Os testes usam o ambiente simulado do Claude Code. Para medir uma tarefa real, use o mesmo projeto de teste e verifique o resultado em cada modo. Há um [cenário de exemplo](docs/cenario-landing-page.md).
+The tests use the simulated Claude Code environment. To measure a real task, use the same test project and check the result in each mode. There is an [example scenario](docs/landing-page-scenario.md).
