@@ -16,6 +16,8 @@ let savedEntries = []
 let selectedHistory = null
 let followLatest = false
 let sentSinceLoad = false
+let previewPorts = null
+const viewUrl = (id, url) => previewPorts ? 'http://' + location.hostname + ':' + previewPorts[id] + new URL(url).pathname : url
 let activeTab = 'compare'
 const previews = { with: undefined, without: undefined }
 const owners = { with: null, without: null }
@@ -171,7 +173,7 @@ function renderPreviews() {
     const settled = owner && owner !== 'waiting'
     if (url === previews[id] && settled && owners[id] !== owner) {
       const iframe = element(id + '-preview').querySelector('iframe')
-      if (iframe) iframe.src = url
+      if (iframe) iframe.src = viewUrl(id, url)
     }
     owners[id] = owner
     badge.textContent = {
@@ -192,10 +194,10 @@ function renderPreviews() {
       frame.replaceChildren(make('p', 'Nenhum servidor local detectado neste terminal. Quando o Claude iniciar um (vite, next, http.server…), a página aparece aqui.', 'preview-empty'))
       continue
     }
-    link.href = url
+    link.href = viewUrl(id, url)
     link.textContent = url.replace('http://', '') + ' ↗'
     const iframe = make('iframe')
-    iframe.src = url
+    iframe.src = viewUrl(id, url)
     iframe.title = 'Preview ' + element(id + '-heading').textContent
     frame.replaceChildren(iframe)
     if (first) showTab('preview')
@@ -205,7 +207,7 @@ function renderPreviews() {
 for (const button of document.querySelectorAll('[data-reload]')) {
   button.addEventListener('click', () => {
     const iframe = element(button.dataset.reload + '-preview').querySelector('iframe')
-    if (iframe) iframe.src = previews[button.dataset.reload]
+    if (iframe) iframe.src = viewUrl(button.dataset.reload, previews[button.dataset.reload])
   })
 }
 
@@ -306,6 +308,7 @@ function connect() {
   socket.onmessage = event => {
     const message = JSON.parse(event.data)
     if (message.type === 'meta') {
+      previewPorts = message.previewPorts ?? null
       element('with-heading').textContent = message.labels?.with ?? 'Com ' + message.item
       element('without-heading').textContent = message.labels?.without ?? 'Sem ' + message.item
       for (const id of ids) element(id + '-preview-label').textContent = element(id + '-heading').textContent

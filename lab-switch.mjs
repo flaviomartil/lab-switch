@@ -15,6 +15,7 @@ import { configuration } from './lib/config.mjs'
 import { ClaudeJournal, turnSummary } from './lib/telemetry.mjs'
 import { defaultHistoryPath, historyStore } from './lib/history.mjs'
 import { capturePage, findBrowser } from './lib/snapshot.mjs'
+import { access, loadToken, previewProxy } from './lib/remote.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 if (process.argv.includes('--help')) {
@@ -42,7 +43,11 @@ const ids = ['with', 'without']
 const sockets = new WebSocketServer({ noServer: true, maxPayload: 65_536 })
 const lanes = new Map()
 const title = config.itemName
-const history = historyStore(config.historyDir ?? (config.demo ? join(scratch, 'history') : defaultHistoryPath()))
+const historyDirectory = config.historyDir ?? (config.demo ? join(scratch, 'history') : defaultHistoryPath())
+const history = historyStore(historyDirectory)
+const remoteListen = !['127.0.0.1', '::1'].includes(config.listen)
+const token = remoteListen ? loadToken(join(dirname(historyDirectory), 'token')) : null
+const gate = access({ listen: config.listen, token })
 const comparisons = new Map()
 const labels = config.telemetryOnly
   ? { with: 'Com telemetria', without: 'Sem telemetria' }
@@ -143,6 +148,11 @@ const run$ = promisify(execFile)
 let checkingPreviews = false
 
 async function listenerCwd(port) {
+  if (process.platform === 'linux') {
+    const { stdout } = await run$('ss', ['-ltnpH', 'sport = :' + port], { timeout: 2000 })
+    const pid = stdout.match(/pid=(\d+)/)?.[1]
+    return pid ? realpath('/proc/' + pid + '/cwd').catch(() => null) : null
+  }
   const { stdout } = await run$('lsof', ['-nP', '-iTCP:' + port, '-sTCP:LISTEN', '-t'], { timeout: 2000 })
   const pid = stdout.trim().split('\n')[0]
   if (!pid) return null
@@ -427,17 +437,22 @@ const staticFiles = new Map([
 ])
 
 function allowedHost(request) {
-  const port = server.address()?.port
-  return request.headers.host === '127.0.0.1:' + port || request.headers.host === 'localhost:' + port
+  return gate.allowedHost(request, server.address()?.port)
 }
 
 const server = createServer(async (request, response) => {
   response.setHeader('X-Content-Type-Options', 'nosniff')
   response.setHeader('Cache-Control', 'no-store')
-  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*" + (gate.remote ? ' http://' + config.listen + ':*' : '') + "; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
   response.setHeader('Referrer-Policy', 'no-referrer')
   if (!allowedHost(request)) {
     response.writeHead(403).end()
+    return
+  }
+  if (gate.login(request, response)) return
+  if (!gate.authorized(request)) {
+    response.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' })
+      .end('Abra o link com token que o Lab Switch imprimiu ao iniciar.')
     return
   }
   const printRoute = request.method === 'GET' && request.url.split('?')[0].match(/^\/history-print\/([0-9a-f-]{36})\/(with|without)\.png$/)
@@ -466,7 +481,7 @@ const server = createServer(async (request, response) => {
 })
 
 server.on('upgrade', (request, socket, head) => {
-  if (!allowedHost(request) || request.url !== '/terminal' || request.headers.origin !== 'http://' + request.headers.host) {
+  if (!allowedHost(request) || !gate.authorized(request) || request.url !== '/terminal' || request.headers.origin !== 'http://' + request.headers.host) {
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
   }
@@ -476,6 +491,7 @@ server.on('upgrade', (request, socket, head) => {
 sockets.on('connection', socket => {
   push(socket, {
     type: 'meta', item: title, kind: config.kind, demo: config.demo,
+    previewPorts: gate.remote ? { with: server.address().port + 1, without: server.address().port + 2 } : null,
     bypassPermissions: !config.demo,
     labels, telemetryOnly: config.telemetryOnly,
     project: config.projectName, model: config.model, sample: config.projectName === 'Projeto de exemplo',
@@ -540,6 +556,17 @@ server.on('error', async error => {
   console.error(error.message)
   await shutdown()
 })
-server.listen(config.port, '127.0.0.1', () => {
-  console.log('Lab Switch: http://127.0.0.1:' + server.address().port)
+server.listen(config.port, config.listen, () => {
+  const port = server.address().port
+  if (!gate.remote) {
+    console.log('Lab Switch: http://127.0.0.1:' + port)
+    return
+  }
+  for (const [offset, id] of [[1, 'with'], [2, 'without']]) {
+    previewProxy({
+      listen: config.listen, port: port + offset, trusted: gate.trusted,
+      target: () => { const url = lanes.get(id)?.preview; return url ? Number(new URL(url).port) : null },
+    })
+  }
+  console.log('Lab Switch: http://' + config.listen + ':' + port + '/?token=' + token)
 })

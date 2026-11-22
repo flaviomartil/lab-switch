@@ -2,12 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WebSocket } from 'ws'
 import { claudeAuthEnvironment, currentOAuthToken } from '../lib/auth.mjs'
-import { configuration } from '../lib/config.mjs'
+import { configuration, hostGitEnvironment } from '../lib/config.mjs'
 import { historyStore } from '../lib/history.mjs'
 import { readClaudeTurns, turnSummary } from '../lib/telemetry.mjs'
 
@@ -33,6 +33,51 @@ test('os dois processos Claude recebem bypass de permissões', t => {
     assert.ok(!args.includes('--permission-mode'))
     assert.equal(env.CLAUDE_CODEFLOW_ENABLED, lane === 'with' ? '0' : undefined)
   }
+})
+
+test('herda a configuração do git, o gh e o agente SSH do host', () => {
+  const home = mkdtempSync(join(tmpdir(), 'lab-host-'))
+  try {
+    mkdirSync(join(home, '.config', 'gh'), { recursive: true })
+    writeFileSync(join(home, '.gitconfig'), '[user]\n  name = Host\n')
+    assert.deepEqual(hostGitEnvironment({ SSH_AUTH_SOCK: '/tmp/agent.sock' }, home), {
+      GIT_CONFIG_GLOBAL: join(home, '.gitconfig'), GH_CONFIG_DIR: join(home, '.config', 'gh'), SSH_AUTH_SOCK: '/tmp/agent.sock',
+    })
+    rmSync(join(home, '.gitconfig'))
+    assert.deepEqual(hostGitEnvironment({}, home), { GH_CONFIG_DIR: join(home, '.config', 'gh') })
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('acesso pela rede exige o token e guarda o cookie', { timeout: 15_000 }, async t => {
+  const historyDir = mkdtempSync(join(tmpdir(), 'lab-remote-test-'))
+  t.after(() => rmSync(historyDir, { recursive: true, force: true }))
+  const child = spawn(process.execPath, ['lab-switch.mjs', '--demo', '--port', '0', '--listen', '127.0.0.2', '--history-dir', join(historyDir, 'history')], {
+    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, LAB_TOKEN: 'token-de-teste-com-tamanho-suficiente' },
+  })
+  t.after(() => { child.kill('SIGTERM') })
+  const [raw] = await once(child.stdout, 'data')
+  const link = raw.toString().match(/http:\/\/127\.0\.0\.2:\d+\/\?token=\S+/)?.[0]
+  assert.ok(link)
+  const base = new URL(link).origin
+  assert.equal((await fetch(base + '/')).status, 401)
+  assert.equal((await fetch(base + '/?token=errado', { redirect: 'manual' })).status, 401)
+  const login = await fetch(link, { redirect: 'manual' })
+  assert.equal(login.status, 302)
+  const cookie = login.headers.get('set-cookie').split(';')[0]
+  assert.match(login.headers.get('set-cookie'), /HttpOnly/)
+  assert.equal((await fetch(base + '/', { headers: { cookie } })).status, 200)
+  const denied = new WebSocket(base.replace('http:', 'ws:') + '/terminal', { origin: base })
+  const [, response] = await once(denied, 'unexpected-response')
+  assert.equal(response.statusCode, 403)
+  response.resume()
+  denied.on('error', () => undefined)
+  denied.terminate()
+  const allowed = new WebSocket(base.replace('http:', 'ws:') + '/terminal', { origin: base, headers: { cookie } })
+  const [data] = await once(allowed, 'message')
+  assert.equal(JSON.parse(data.toString()).previewPorts.with, Number(new URL(base).port) + 1)
+  allowed.terminate()
 })
 
 test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 25_000 }, async t => {
