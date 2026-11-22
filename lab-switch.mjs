@@ -75,7 +75,7 @@ function status() {
   return {
     type: 'state', run, sending, transitioning,
     lanes: Object.fromEntries(ids.map(id => [id, {
-      status: laneStatus(lanes.get(id)), permissionMode: lanes.get(id)?.permissionMode ?? null,
+      status: laneStatus(lanes.get(id)), permissionMode: lanes.get(id)?.permissionMode ?? null, preview: lanes.get(id)?.preview ?? null,
     }])),
   }
 }
@@ -122,11 +122,23 @@ function submitLane(lane) {
   lane.recheck = setTimeout(() => refreshLane(lane), 310)
 }
 
+function detectPreview(lane, data) {
+  lane.tail = (lane.tail + data.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')).slice(-400)
+  const urls = [...lane.tail.matchAll(/https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):(\d{2,5})(\/[\w\-./]*)?/g)]
+  const found = urls.reverse().find(match => Number(match[1]) !== config.port && Number(match[1]) < 65536)
+  if (!found) return
+  const url = 'http://127.0.0.1:' + found[1] + (found[2] ?? '/')
+  if (url === lane.preview) return
+  lane.preview = url
+  broadcast(status())
+}
+
 function receive(lane, data) {
   if (lanes.get(lane.id) !== lane) return
   lane.received = true
   lane.outputPending += 1
   lane.history = (lane.history + data).slice(-393_216)
+  detectPreview(lane, data)
   broadcast({ type: 'data', run: lane.run, lane: lane.id, data })
   lane.screen.write(data, () => {
     lane.outputPending -= 1
@@ -144,7 +156,7 @@ function spawnLane(id, directory) {
   const lane = {
     id, run, process, screen, history: '', exit: null, stopping: false,
     status: 'starting', received: false, inputUntil: 0, outputPending: 0,
-    journal: new ClaudeJournal(config.profiles[id], sessionId), permissionMode: null,
+    journal: new ClaudeJournal(config.profiles[id], sessionId), permissionMode: null, preview: null, tail: '',
   }
   lanes.set(id, lane)
   process.onData(data => receive(lane, data))
@@ -339,7 +351,7 @@ function allowedHost(request) {
 const server = createServer(async (request, response) => {
   response.setHeader('X-Content-Type-Options', 'nosniff')
   response.setHeader('Cache-Control', 'no-store')
-  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
   response.setHeader('Referrer-Policy', 'no-referrer')
   if (!allowedHost(request)) {
     response.writeHead(403).end()

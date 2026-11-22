@@ -16,7 +16,6 @@
       <div class="brand"><span class="brand-mark" aria-hidden="true">↔</span> Lab Switch</div>
       <div class="actions">
         <span class="connection" id="connection"><i></i><span>Conectando</span></span>
-        <button type="button" id="history" class="secondary" disabled>Histórico</button>
         <button type="button" id="restart" class="secondary" disabled>Novo par</button>
         <button type="button" id="stop" class="quiet" disabled>Encerrar</button>
       </div>
@@ -63,16 +62,28 @@
         <button id="send" class="primary" type="submit" disabled>Enviar aos dois <span aria-hidden="true">↗</span></button>
       </div>
     </form>
+
+    <section class="lab" aria-labelledby="lab-title">
+      <div class="lab-head">
+        <h2 id="lab-title">Rodadas</h2>
+        <div class="tabs" role="tablist" aria-label="Visão da rodada">
+          <button type="button" role="tab" id="tab-compare" aria-controls="history-detail" aria-selected="true">Comparação</button>
+          <button type="button" role="tab" id="tab-preview" aria-controls="preview" aria-selected="false">Preview</button>
+        </div>
+      </div>
+      <div class="lab-body">
+        <nav id="history-list" aria-label="Rodadas salvas"></nav>
+        <div class="lab-view">
+          <div id="history-detail" role="tabpanel" aria-labelledby="tab-compare" aria-live="polite"></div>
+          <div id="preview" role="tabpanel" aria-labelledby="tab-preview" hidden>
+            <div class="preview-pair">
+              <figure class="preview-lane" data-lane="with"><figcaption><span id="with-preview-label">Com item</span><span class="preview-tools"><a id="with-preview-link" target="_blank" rel="noopener" hidden>Abrir</a><button type="button" class="link" data-reload="with" hidden>Recarregar</button></span></figcaption><div class="preview-frame" id="with-preview"></div></figure>
+              <figure class="preview-lane" data-lane="without"><figcaption><span id="without-preview-label">Sem item</span><span class="preview-tools"><a id="without-preview-link" target="_blank" rel="noopener" hidden>Abrir</a><button type="button" class="link" data-reload="without" hidden>Recarregar</button></span></figcaption><div class="preview-frame" id="without-preview"></div></figure>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
-  <dialog id="history-dialog" aria-labelledby="history-title">
-    <div class="history-head">
-      <h2 id="history-title">Histórico do Lab</h2>
-      <form method="dialog"><button class="secondary" aria-label="Fechar histórico">Fechar</button></form>
-    </div>
-    <div class="history-content">
-      <nav id="history-list" aria-label="Rodadas salvas"></nav>
-      <div id="history-detail" aria-live="polite"></div>
-    </div>
-  </dialog>
 </body>
 </html>

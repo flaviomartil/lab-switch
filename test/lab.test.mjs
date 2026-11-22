@@ -91,6 +91,11 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   assert.deepEqual(await historyStore(historyDir).read(saved.id), saved)
   socket.send(JSON.stringify({ type: 'history-open', id: saved.id }))
   await waitFor(() => events.some(e => e.type === 'history-open' && e.entry.id === saved.id))
+  socket.send(JSON.stringify({ type: 'send', text: 'suba o servidor' }))
+  await waitFor(() => state()?.lanes.with.preview && state()?.lanes.without.preview)
+  assert.equal(state().lanes.with.preview, 'http://127.0.0.1:5173/')
+  assert.equal(state().lanes.without.preview, 'http://127.0.0.1:5174/')
+  await waitFor(ready)
   socket.send(JSON.stringify({ type: 'stop' }))
   await waitFor(() => state()?.lanes.with.status === 'stopped' && state().lanes.without.status === 'stopped')
   const before = events.filter(e => e.type === 'data').length

@@ -27,6 +27,9 @@ process.stdin.on('data', data => {
     process.stdout.write(input.replaceAll('\n', '\r\n') + '\r\n\r\n')
     process.stdout.write('Entrada recebida nesta sessão.\r\n')
     let answer = 'Entrada recebida nesta sessão.'
+    if (input.includes('servidor')) {
+      process.stdout.write('  \x1b[32m➜\x1b[39m  Local:   \x1b[36mhttp://localhost:\x1b[1m' + (withItem ? 5173 : 5174) + '\x1b[22m/\x1b[39m\r\n')
+    }
     if (input.includes('rotina.tsv')) {
       answer = finished.length + ' tarefas concluídas. Última: ' + last + '.'
       process.stdout.write(answer + '\r\n')

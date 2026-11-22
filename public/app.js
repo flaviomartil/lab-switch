@@ -8,14 +8,15 @@ const stopButton = element('stop')
 const connection = element('connection')
 const sample = 'No arquivo rotina.tsv, conte as tarefas marcadas como feito e diga o identificador da última concluída.'
 
-const historyButton = element('history')
-const historyDialog = element('history-dialog')
 const historyList = element('history-list')
 const historyDetail = element('history-detail')
 const numberFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
 const historyDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 let savedEntries = []
 let selectedHistory = null
+let followLatest = false
+let activeTab = 'compare'
+const previews = { with: undefined, without: undefined }
 
 function make(tag, text, className) {
   const node = document.createElement(tag)
@@ -36,18 +37,19 @@ function selectHistory(id) {
 
 function showHistoryList(entries) {
   savedEntries = entries
-  historyButton.textContent = entries.length ? 'Histórico · ' + entries.length : 'Histórico'
+  element('lab-title').textContent = entries.length ? 'Rodadas · ' + entries.length : 'Rodadas'
   historyList.replaceChildren()
   for (const entry of entries) {
     const button = make('button')
     button.type = 'button'
     button.dataset.id = entry.id
     if (entry.id === selectedHistory) button.setAttribute('aria-current', 'true')
-    button.append(make('span', historyDate.format(new Date(entry.startedAt)), 'history-date'), make('span', entry.prompt))
+    const when = make('span', historyDate.format(new Date(entry.startedAt)), 'history-date')
+    if (entry.status === 'running') when.append(make('span', ' · em andamento', 'live'))
+    button.append(when, make('span', entry.prompt))
     button.addEventListener('click', () => selectHistory(entry.id))
     historyList.append(button)
   }
-  if (!historyDialog.open) return
   if (!entries.length) historyDetail.replaceChildren(make('p', 'Envie um prompt aos dois terminais para criar a primeira comparação.'))
   else if (!entries.some(entry => entry.id === selectedHistory)) selectHistory(entries[0].id)
 }
@@ -115,11 +117,47 @@ function showComparison(entry) {
   }
 }
 
-historyButton.addEventListener('click', () => {
-  historyDialog.showModal()
-  showHistoryList(savedEntries)
-  post({ type: 'history-list' })
-})
+function showTab(tab) {
+  activeTab = tab
+  for (const name of ['compare', 'preview']) element('tab-' + name).setAttribute('aria-selected', String(name === tab))
+  element('history-detail').hidden = tab !== 'compare'
+  element('preview').hidden = tab !== 'preview'
+}
+element('tab-compare').addEventListener('click', () => showTab('compare'))
+element('tab-preview').addEventListener('click', () => showTab('preview'))
+
+function renderPreviews() {
+  let count = 0
+  for (const id of ids) {
+    const url = state.lanes[id]?.preview ?? null
+    if (url) count += 1
+    if (url === previews[id]) continue
+    const first = !Object.values(previews).some(Boolean)
+    previews[id] = url
+    const frame = element(id + '-preview')
+    const link = element(id + '-preview-link')
+    const reload = document.querySelector('[data-reload="' + id + '"]')
+    link.hidden = reload.hidden = !url
+    if (!url) {
+      frame.replaceChildren(make('p', 'Nenhum servidor local detectado neste terminal. Quando o Claude iniciar um (vite, next, http.server…), a página aparece aqui.', 'preview-empty'))
+      continue
+    }
+    link.href = url
+    link.textContent = url.replace('http://', '') + ' ↗'
+    const iframe = make('iframe')
+    iframe.src = url
+    iframe.title = 'Preview ' + element(id + '-heading').textContent
+    frame.replaceChildren(iframe)
+    if (first) showTab('preview')
+  }
+  element('tab-preview').textContent = count ? 'Preview · ' + count : 'Preview'
+}
+for (const button of document.querySelectorAll('[data-reload]')) {
+  button.addEventListener('click', () => {
+    const iframe = element(button.dataset.reload + '-preview').querySelector('iframe')
+    if (iframe) iframe.src = previews[button.dataset.reload]
+  })
+}
 
 const labels = {
   starting: 'Iniciando', setup: 'Configuração', approval: 'Aguardando confirmação',
@@ -191,7 +229,7 @@ function update() {
     element(ids[index] + '-mode').textContent = mode ?? (index === 0 ? 'Experimental' : 'Controle')
   })
   restartButton.disabled = !online || pending || state.sending || state.transitioning
-  historyButton.disabled = !online
+  renderPreviews()
   stopButton.disabled = restartButton.disabled || stopped
   sendButton.disabled = !online || pending || state.sending || state.transitioning || !ready || !prompt.value.trim()
   hint.textContent = notice || (
@@ -220,6 +258,7 @@ function connect() {
     if (message.type === 'meta') {
       element('with-heading').textContent = message.labels?.with ?? 'Com ' + message.item
       element('without-heading').textContent = message.labels?.without ?? 'Sem ' + message.item
+      for (const id of ids) element(id + '-preview-label').textContent = element(id + '-heading').textContent
       element('item-summary').textContent = (message.demo ? 'Demonstração de PTY · ' : 'Item testado · ') +
         message.item + (message.telemetryOnly ? ' · Comparação de telemetria' : '')
       element('project-summary').textContent = message.project + (message.model ? ' · ' + message.model : '')
@@ -238,12 +277,17 @@ function connect() {
     }
     if (message.type === 'state') state = message
     if (message.type === 'history-list') showHistoryList(message.entries)
+    if (message.type === 'history-entry' && followLatest && message.entry.source !== 'imported') {
+      followLatest = false
+      selectedHistory = message.entry.id
+    }
     if (message.type === 'history-open' || message.type === 'history-entry') showComparison(message.entry)
     if (message.type === 'notice') {
       pending = false
       notice = message.text
     }
     if (message.type === 'sent') {
+      followLatest = true
       pending = false
       prompt.value = ''
       notice = ''
