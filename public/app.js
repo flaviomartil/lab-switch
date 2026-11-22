@@ -17,6 +17,7 @@ let selectedHistory = null
 let followLatest = false
 let activeTab = 'compare'
 const previews = { with: undefined, without: undefined }
+const owners = { with: null, without: null }
 
 function make(tag, text, className) {
   const node = document.createElement(tag)
@@ -134,6 +135,12 @@ function renderPreviews() {
     const owner = url ? state.lanes[id]?.previewOwner ?? 'waiting' : null
     const badge = element(id + '-preview-owner')
     badge.dataset.owner = owner ?? ''
+    const settled = owner && owner !== 'waiting'
+    if (url === previews[id] && settled && owners[id] !== owner) {
+      const iframe = element(id + '-preview').querySelector('iframe')
+      if (iframe) iframe.src = url
+    }
+    owners[id] = owner
     badge.textContent = {
       self: '✓ servido por este terminal', waiting: 'aguardando servidor', unknown: '',
       external: '⚠ porta de outro processo da máquina',
