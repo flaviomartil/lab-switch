@@ -58,7 +58,7 @@ No Mac, o Keychain fica inacessível para processos iniciados por SSH. Por isso 
 `--listen` liga o Lab num IP da máquina, em vez de só no `127.0.0.1`:
 
 ```bash
-npm start -- --listen 192.168.31.31 --port 4178
+npm start -- --listen 192.168.1.50 --port 4178
 ```
 
 Ao iniciar, o Lab imprime um link com token (`http://IP:4178/?token=...`). O primeiro acesso por esse link grava um cookie `HttpOnly` e o navegador não precisa mais do token. Sem o cookie, a página responde 401 e o terminal recusa a conexão. O token fica salvo ao lado do histórico, no arquivo `token`, e `LAB_TOKEN` define outro valor. Os terminais rodam com bypass de permissões, então trate o link como uma senha e libere a porta só para as máquinas que vão usar o Lab.
@@ -78,7 +78,7 @@ After=network-online.target
 
 [Service]
 WorkingDirectory=/caminho/lab-switch/app
-ExecStart=/usr/bin/node lab-switch.mjs --listen 192.168.31.31 --port 4178 --claude-bin /caminho/do/claude
+ExecStart=/usr/bin/node lab-switch.mjs --listen 192.168.1.50 --port 4178 --claude-bin /caminho/do/claude
 Restart=on-failure
 
 [Install]
