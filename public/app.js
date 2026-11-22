@@ -106,10 +106,41 @@ function showComparison(entry) {
     panel.append(make('h4', labels[index]), make('pre', side?.answer || 'Resposta ainda indisponível.'))
     replies.append(panel)
   })
+  const ownerText = {
+    self: '✓ servido por este terminal', with: '⚠ servido pelo outro terminal', without: '⚠ servido pelo outro terminal',
+    external: '⚠ porta de outro processo', waiting: 'servidor ainda não respondia',
+  }
+  let prints = null
+  if (sides.some(side => side?.print)) {
+    prints = make('div', undefined, 'history-prints')
+    sides.forEach((side, index) => {
+      const figure = make('figure', undefined, 'print')
+      const caption = make('figcaption')
+      caption.append(make('strong', labels[index]))
+      if (side?.print) {
+        const badge = make('span', ownerText[side.print.owner] ?? '', 'owner')
+        badge.dataset.owner = side.print.owner ?? ''
+        caption.append(badge, make('span', side.print.url.replace('http://', ''), 'history-date'))
+        const link = make('a')
+        link.href = '/history-print/' + entry.id + '/' + ids[index] + '.png?v=' + encodeURIComponent(side.print.capturedAt)
+        link.target = '_blank'
+        const image = make('img')
+        image.src = link.href
+        image.alt = 'Print do preview: ' + labels[index]
+        image.loading = 'lazy'
+        link.append(image)
+        figure.append(caption, link)
+      } else {
+        figure.append(caption, make('p', 'Sem preview nesta rodada.', 'preview-empty'))
+      }
+      prints.append(figure)
+    })
+  }
   historyDetail.replaceChildren(
     make('h3', 'Prompt'),
     make('p', entry.prompt),
     make('p', [statusLabel, origin, historyDate.format(new Date(entry.startedAt))].filter(Boolean).join(' · '), 'history-date'),
+    ...(prints ? [make('h3', 'Print do preview', 'section-title'), prints] : []),
     metrics,
     replies,
   )

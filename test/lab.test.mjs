@@ -35,11 +35,11 @@ test('os dois processos Claude recebem bypass de permissões', t => {
   }
 })
 
-test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 15_000 }, async t => {
+test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 25_000 }, async t => {
   const historyDir = mkdtempSync(join(tmpdir(), 'lab-history-test-'))
   t.after(() => rmSync(historyDir, { recursive: true, force: true }))
   const child = spawn(process.execPath, ['lab-switch.mjs', '--demo', '--port', '0', '--history-dir', historyDir], {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, LAB_BROWSER: join(import.meta.dirname, 'fake-browser.mjs') },
   })
   t.after(() => { child.kill('SIGTERM') })
   const [raw] = await once(child.stdout, 'data')
@@ -56,8 +56,8 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   socket.on('message', data => events.push(JSON.parse(data.toString())))
   t.after(() => { socket.terminate() })
   await once(socket, 'open')
-  const waitFor = async condition => {
-    for (let attempt = 0; attempt < 120; attempt += 1) {
+  const waitFor = async (condition, attempts = 120) => {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       if (condition()) return
       await new Promise(resolve => setTimeout(resolve, 30))
     }
@@ -96,6 +96,14 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   assert.equal(state().lanes.with.preview, 'http://127.0.0.1:5173/')
   assert.equal(state().lanes.without.preview, 'http://127.0.0.1:5174/')
   await waitFor(ready)
+  const printed = () => events.findLast(e => e.type === 'history-entry' && e.entry.prompt === 'suba o servidor' && e.entry.sides.with?.print && e.entry.sides.without?.print)
+  await waitFor(printed, 300)
+  const printEntry = printed().entry
+  assert.equal(printEntry.sides.with.print.url, 'http://127.0.0.1:5173/')
+  const image = await fetch(url + '/history-print/' + printEntry.id + '/with.png')
+  assert.equal(image.headers.get('content-type'), 'image/png')
+  assert.match(Buffer.from(await image.arrayBuffer()).toString('latin1'), /PNG[\s\S]*127\.0\.0\.1:5173/)
+  assert.equal((await fetch(url + '/history-print/not-an-id/with.png')).status, 404)
   socket.send(JSON.stringify({ type: 'stop' }))
   await waitFor(() => state()?.lanes.with.status === 'stopped' && state().lanes.without.status === 'stopped')
   const before = events.filter(e => e.type === 'data').length

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http'
-import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { readFile, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { chmodSync, existsSync, statSync } from 'node:fs'
@@ -14,6 +14,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { configuration } from './lib/config.mjs'
 import { ClaudeJournal, turnSummary } from './lib/telemetry.mjs'
 import { defaultHistoryPath, historyStore } from './lib/history.mjs'
+import { capturePage, findBrowser } from './lib/snapshot.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 if (process.argv.includes('--help')) {
@@ -281,6 +282,40 @@ async function publishHistory(socket) {
   }
 }
 
+const browser = findBrowser()
+const printQueue = new Map()
+
+async function capturePrints(id, pair) {
+  const targets = pair.filter(lane => lane.preview)
+  if (!browser || !targets.length) return
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  await checkPreviews()
+  const prints = {}
+  for (const lane of targets) {
+    const file = history.printPath(id, lane.id)
+    try {
+      await mkdir(dirname(file), { recursive: true, mode: 0o700 })
+      if (await capturePage(browser, lane.preview, file)) {
+        prints[lane.id] = { url: lane.preview, owner: lane.previewOwner, capturedAt: new Date().toISOString() }
+      }
+    } catch (error) {
+      console.error('Print do preview:', error.code ?? error.name)
+    }
+  }
+  if (!Object.keys(prints).length) return
+  const previous = printQueue.get(id) ?? Promise.resolve()
+  const next = previous.then(async () => {
+    const entry = await history.read(id)
+    if (!entry) return
+    for (const [lane, print] of Object.entries(prints)) entry.sides[lane] = { ...entry.sides[lane], print }
+    await history.write(entry)
+    broadcast({ type: 'history-entry', entry })
+  }).catch(error => console.error('Print do preview:', error.code ?? error.name))
+  printQueue.set(id, next)
+  await next
+  if (printQueue.get(id) === next) printQueue.delete(id)
+}
+
 async function collectPending() {
   try {
     for (const pending of comparisons.values()) {
@@ -302,6 +337,7 @@ async function collectPending() {
       const status = ids.every(id => updated.sides[id]?.complete) ? 'complete'
         : pair.some(lane => lane.exit !== null) ? 'partial' : 'running'
       if (changed || record.status !== status) {
+        if (status === 'complete' && record.status !== 'complete') void capturePrints(record.id, pair)
         updated.status = status
         await history.write(updated)
         pending.record = updated
@@ -402,6 +438,18 @@ const server = createServer(async (request, response) => {
   response.setHeader('Referrer-Policy', 'no-referrer')
   if (!allowedHost(request)) {
     response.writeHead(403).end()
+    return
+  }
+  const printRoute = request.method === 'GET' && request.url.match(/^\/history-print\/([0-9a-f-]{36})\/(with|without)\.png(?:\?[\w=.-]*)?$/)
+  if (printRoute) {
+    const path = history.printPath(printRoute[1], printRoute[2])
+    try {
+      const body = path && await readFile(path)
+      if (!body) throw new Error('missing')
+      response.writeHead(200, { 'Content-Type': 'image/png' }).end(body)
+    } catch {
+      response.writeHead(404).end()
+    }
     return
   }
   const file = request.method === 'GET' && staticFiles.get(request.url)
