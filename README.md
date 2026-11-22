@@ -27,7 +27,7 @@ Os dados ficam em `~/Library/Application Support/Lab Switch/history` no Mac e em
 
 Quando um terminal imprime uma URL local (`localhost`, `127.0.0.1`, `0.0.0.0` ou `[::1]` com porta), a aba **Preview** abre essa página ao lado da página do outro terminal. A aba abre sozinha no primeiro servidor que surge depois de um envio. **Abrir** leva a página para outra aba e **Recarregar** atualiza o quadro.
 
-Os dois terminais compartilham as portas da máquina. Se os dois tentarem a mesma porta, um servidor falha e o Claude desse lado pode acabar conferindo a página do outro. Por isso cada preview indica quem está escutando na porta, pelo `lsof`:
+Os dois terminais compartilham as portas da máquina. Se os dois tentarem a mesma porta, um servidor falha e o Claude desse lado pode acabar conferindo a página do outro. Por isso cada preview indica quem está escutando na porta, pelo `ss` e `/proc` no Linux ou pelo `lsof` no Mac:
 
 | Etiqueta | Significado |
 |---|---|
@@ -43,11 +43,56 @@ Quando os dois lados terminam a rodada, o Lab tira um print de cada preview e gu
 
 O print usa o Chrome, Chromium, Edge ou Brave instalado, em modo headless. `LAB_BROWSER` aponta para outro executável compatível. Sem navegador, a rodada é salva sem print.
 
-## Login
+## Login e git do host
 
-O laboratório reaproveita um token OAuth válido da instalação local do Claude Code ou do Keychain padrão do Mac quando acessível. Também aceita `CLAUDE_CODE_OAUTH_TOKEN` ou `ANTHROPIC_API_KEY` fornecidos ao CLI pelo ambiente. Cada par recebe a mesma autenticação, com configurações, extensões e projetos isolados. A autenticação reaproveitada é repassada aos processos do Claude e o laboratório mantém o token fora dos arquivos e do navegador. Se a credencial reaproveitada expirar, inicie um novo par após renovar o login na instalação principal. Cada perfil já vem com tema definido, onboarding concluído e a cópia do projeto marcada como confiável, então os terminais abrem direto no prompt.
+Cada par reaproveita o login do Claude Code da máquina que roda o Lab: `~/.claude/.credentials.json` no Linux ou o Keychain no Mac, além de `CLAUDE_CODE_OAUTH_TOKEN` ou `ANTHROPIC_API_KEY` no ambiente. O token é lido de novo a cada **Novo par**, então um login renovado no host vale no par seguinte. Ele vai só para os processos do Claude e fica fora dos arquivos e do navegador.
 
-Se o Lab for iniciado por SSH, o Keychain do Mac costuma ficar inacessível e os terminais mostram `Not logged in`. Inicie pelo Terminal do próprio Mac ou forneça uma credencial oficial no ambiente do launcher. Veja a [documentação de autenticação do Claude Code](https://code.claude.com/docs/en/authentication).
+Os dois lados também herdam o git do host: `GIT_CONFIG_GLOBAL` aponta para o `~/.gitconfig` (ou `~/.config/git/config`), `GH_CONFIG_DIR` para a configuração do `gh`, e `SSH_AUTH_SOCK`, `GH_TOKEN`, `GITHUB_TOKEN` e `GIT_SSH_COMMAND` passam adiante quando existem. A cópia do projeto leva o `.git`, então cada lado vê o histórico e pode criar commits. Com as credenciais herdadas, um `git push` feito por qualquer lado chega ao remoto de verdade.
+
+Cada perfil já vem com tema definido, onboarding concluído e a cópia do projeto marcada como confiável, então os terminais abrem direto no prompt.
+
+No Mac, o Keychain fica inacessível para processos iniciados por SSH. Por isso a forma recomendada é rodar o Lab numa máquina Linux e abrir pela rede.
+
+## Acesso pela rede
+
+`--listen` liga o Lab num IP da máquina, em vez de só no `127.0.0.1`:
+
+```bash
+npm start -- --listen 192.168.31.31 --port 4178
+```
+
+Ao iniciar, o Lab imprime um link com token (`http://IP:4178/?token=...`). O primeiro acesso por esse link grava um cookie `HttpOnly` e o navegador não precisa mais do token. Sem o cookie, a página responde 401 e o terminal recusa a conexão. O token fica salvo ao lado do histórico, no arquivo `token`, e `LAB_TOKEN` define outro valor. Os terminais rodam com bypass de permissões, então trate o link como uma senha e libere a porta só para as máquinas que vão usar o Lab.
+
+Os previews dos dois lados passam por proxies nas portas seguintes (`4179` para o lado com o item, `4180` para o controle), que só aceitam endereços que já entraram com o token. Libere as três portas no firewall:
+
+```bash
+sudo ufw allow from IP_DO_CLIENTE to any port 4178:4180 proto tcp
+```
+
+Para deixar o Lab sempre ligado no Linux, use um serviço de usuário do systemd:
+
+```ini
+[Unit]
+Description=Lab Switch
+After=network-online.target
+
+[Service]
+WorkingDirectory=/caminho/lab-switch/app
+ExecStart=/usr/bin/node lab-switch.mjs --listen 192.168.31.31 --port 4178 --claude-bin /caminho/do/claude
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Salve em `~/.config/systemd/user/lab-switch.service` e ative:
+
+```bash
+systemctl --user enable --now lab-switch
+journalctl --user -u lab-switch | grep token=
+```
+
+Use `loginctl enable-linger` para o serviço continuar ativo sem sessão aberta. Quando o `claude` vem de um gerenciador de versões, aponte `--claude-bin` para o executável real.
 
 ## Outros itens
 
@@ -63,6 +108,6 @@ npm start -- --kind mod --item /caminho/codeflow --project /caminho/projeto
 
 ## Dados locais
 
-Cada lado recebe um HOME, um CLAUDE_CONFIG_DIR e um diretório de trabalho isolados. Novo par cria novas cópias do projeto e mantém os perfis descartáveis do servidor. Encerrar finaliza os dois processos. Encerre o servidor com Ctrl+C para apagar os perfis do laboratório. O servidor aceita conexões de loopback com a origem local esperada. Use extensões e projetos confiáveis, pois os binários rodam com a conta do usuário e as políticas gerenciadas do Claude continuam valendo.
+Cada lado recebe um HOME, um CLAUDE_CONFIG_DIR e um diretório de trabalho isolados. Novo par cria novas cópias do projeto e mantém os perfis descartáveis do servidor. Encerrar finaliza os dois processos. Encerre o servidor com Ctrl+C para apagar os perfis do laboratório. Sem `--listen`, o servidor aceita só conexões de loopback com a origem local esperada. Use extensões e projetos confiáveis, pois os binários rodam com a conta do usuário e as políticas gerenciadas do Claude continuam valendo.
 
-`npm test` exercita os dois PTYs, o envio em múltiplas linhas, o bypass de permissões, a gravação do histórico, a detecção de preview com as cores ANSI do vite, o print com um navegador falso, o encerramento e a recusa de origem externa. Os testes usam a demonstração determinística.
+`npm test` exercita os dois PTYs, o envio em múltiplas linhas, o bypass de permissões, a gravação do histórico, a detecção de preview com as cores ANSI do vite, o print com um navegador falso, o acesso pela rede com token, a herança do git do host, o encerramento e a recusa de origem externa. Os testes usam a demonstração determinística.
