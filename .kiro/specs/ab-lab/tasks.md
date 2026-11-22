@@ -45,3 +45,9 @@
   - _Requirements: all_
 
 - [x] 9. English localization of UI, docs and tests
+
+- [ ] 10. Hackathon submission (Kiroween 2026)
+  - [ ] 10.1 Demo video script and recording (under 3 minutes, shows a full round end to end)
+  - [ ] 10.2 README polish for judges (quickstart, screenshots, what to compare first)
+  - [ ] 10.3 Kiro usage write-up for the Devpost submission
+  - [x] 10.4 Add an open-source license file (Devpost requires a detectable license on the repo)
