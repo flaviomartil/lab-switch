@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http'
-import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { chmodSync, existsSync, statSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -76,6 +78,7 @@ function status() {
     type: 'state', run, sending, transitioning,
     lanes: Object.fromEntries(ids.map(id => [id, {
       status: laneStatus(lanes.get(id)), permissionMode: lanes.get(id)?.permissionMode ?? null, preview: lanes.get(id)?.preview ?? null,
+      previewOwner: lanes.get(id)?.previewOwner ?? null,
     }])),
   }
 }
@@ -130,7 +133,49 @@ function detectPreview(lane, data) {
   const url = 'http://127.0.0.1:' + found[1] + (found[2] ?? '/')
   if (url === lane.preview) return
   lane.preview = url
+  lane.previewOwner = null
   broadcast(status())
+  void checkPreviews()
+}
+
+const run$ = promisify(execFile)
+let checkingPreviews = false
+
+async function listenerCwd(port) {
+  const { stdout } = await run$('lsof', ['-nP', '-iTCP:' + port, '-sTCP:LISTEN', '-t'], { timeout: 2000 })
+  const pid = stdout.trim().split('\n')[0]
+  if (!pid) return null
+  const cwd = await run$('lsof', ['-a', '-p', pid, '-d', 'cwd', '-Fn'], { timeout: 2000 })
+  const line = cwd.stdout.split('\n').find(row => row.startsWith('n'))
+  return line ? realpath(line.slice(1)).catch(() => line.slice(1)) : null
+}
+
+async function checkPreviews() {
+  if (checkingPreviews) return
+  checkingPreviews = true
+  try {
+    const current = [...lanes.values()].filter(lane => lane.preview)
+    const roots = await Promise.all([...lanes.values()].map(async lane => [lane.id, await realpath(lane.cwd).catch(() => lane.cwd)]))
+    let changed = false
+    for (const lane of current) {
+      let owner
+      try {
+        const cwd = await listenerCwd(new URL(lane.preview).port)
+        owner = !cwd ? 'waiting'
+          : roots.find(([, root]) => cwd === root || cwd.startsWith(root + '/'))?.[0] ?? 'external'
+        if (owner === lane.id) owner = 'self'
+      } catch (error) {
+        owner = error.code === 'ENOENT' ? 'unknown' : 'waiting'
+      }
+      if (owner !== lane.previewOwner) {
+        lane.previewOwner = owner
+        changed = true
+      }
+    }
+    if (changed) broadcast(status())
+  } finally {
+    checkingPreviews = false
+  }
 }
 
 function receive(lane, data) {
@@ -157,6 +202,7 @@ function spawnLane(id, directory) {
     id, run, process, screen, history: '', exit: null, stopping: false,
     status: 'starting', received: false, inputUntil: 0, outputPending: 0,
     journal: new ClaudeJournal(config.profiles[id], sessionId), permissionMode: null, preview: null, tail: '',
+    previewOwner: null, cwd: join(directory, id),
   }
   lanes.set(id, lane)
   process.onData(data => receive(lane, data))
@@ -277,6 +323,7 @@ function collectHistory() {
 }
 
 const historyPoll = setInterval(() => void collectHistory(), 540).unref()
+setInterval(() => void checkPreviews(), 3000).unref()
 
 function updateSize(cols, rows) {
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 30 || cols > 280 || rows < 10 || rows > 70) return

@@ -142,6 +142,9 @@ h1 em { font-family: Fraunces, Georgia, serif; font-weight: 600; color: var(--te
 .preview-tools a, .link { color: var(--green); background: none; border: 0; padding: 0; font: inherit; text-decoration: underline; overflow-wrap: anywhere; }
 .preview-frame { height: clamp(320px, 55vh, 720px); background: #fff; border-top: 1px solid #8c8579; }
 .preview-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.owner { font: 11px var(--mono); font-weight: 500; color: var(--green); }
+.owner[data-owner="with"], .owner[data-owner="without"], .owner[data-owner="external"] { color: #fff; background: var(--terra); padding: 2px 6px; border-radius: 5px; }
+.owner[data-owner="waiting"] { color: #6b604c; }
 .preview-empty { margin: 0; padding: 16px; color: #4c493e; font-size: 13px; line-height: 1.45; }
 #history-list { display: flex; flex-direction: column; gap: 6px; padding: 12px; background: var(--paper-dark); }
 #history-list button { border: 1px solid #8c8579; border-radius: 7px; background: var(--card); padding: 9px; text-align: left; overflow-wrap: anywhere; }

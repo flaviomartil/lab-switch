@@ -131,6 +131,16 @@ function renderPreviews() {
   for (const id of ids) {
     const url = state.lanes[id]?.preview ?? null
     if (url) count += 1
+    const owner = url ? state.lanes[id]?.previewOwner ?? 'waiting' : null
+    const badge = element(id + '-preview-owner')
+    badge.dataset.owner = owner ?? ''
+    badge.textContent = {
+      self: '✓ servido por este terminal', waiting: 'aguardando servidor', unknown: '',
+      external: '⚠ porta de outro processo da máquina',
+      with: '⚠ servido pelo outro terminal', without: '⚠ servido pelo outro terminal',
+    }[owner] ?? ''
+    badge.title = owner === 'with' || owner === 'without'
+      ? 'Os dois terminais compartilham as portas da máquina. O servidor deste lado não está escutando nessa porta; a página mostrada é a do outro lado.' : ''
     if (url === previews[id]) continue
     const first = !Object.values(previews).some(Boolean)
     previews[id] = url
