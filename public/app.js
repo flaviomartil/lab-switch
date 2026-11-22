@@ -15,6 +15,7 @@ const historyDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeS
 let savedEntries = []
 let selectedHistory = null
 let followLatest = false
+let sentSinceLoad = false
 let activeTab = 'compare'
 const previews = { with: undefined, without: undefined }
 const owners = { with: null, without: null }
@@ -26,8 +27,9 @@ function make(tag, text, className) {
   return node
 }
 
-function selectHistory(id) {
+function selectHistory(id, user = false) {
   selectedHistory = id
+  if (user) showTab('compare')
   for (const button of historyList.querySelectorAll('button')) {
     if (button.dataset.id === id) button.setAttribute('aria-current', 'true')
     else button.removeAttribute('aria-current')
@@ -48,7 +50,7 @@ function showHistoryList(entries) {
     const when = make('span', historyDate.format(new Date(entry.startedAt)), 'history-date')
     if (entry.status === 'running') when.append(make('span', ' · em andamento', 'live'))
     button.append(when, make('span', entry.prompt))
-    button.addEventListener('click', () => selectHistory(entry.id))
+    button.addEventListener('click', () => selectHistory(entry.id, true))
     historyList.append(button)
   }
   if (!entries.length) historyDetail.replaceChildren(make('p', 'Envie um prompt aos dois terminais para criar a primeira comparação.'))
@@ -180,7 +182,7 @@ function renderPreviews() {
     badge.title = owner === 'with' || owner === 'without'
       ? 'Os dois terminais compartilham as portas da máquina. O servidor deste lado não está escutando nessa porta; a página mostrada é a do outro lado.' : ''
     if (url === previews[id]) continue
-    const first = !Object.values(previews).some(Boolean)
+    const first = sentSinceLoad && !Object.values(previews).some(Boolean)
     previews[id] = url
     const frame = element(id + '-preview')
     const link = element(id + '-preview-link')
@@ -336,6 +338,7 @@ function connect() {
     }
     if (message.type === 'sent') {
       followLatest = true
+      sentSinceLoad = true
       pending = false
       prompt.value = ''
       notice = ''

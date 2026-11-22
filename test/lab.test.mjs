@@ -100,7 +100,7 @@ test('dois PTYs recebem a mesma entrada uma vez e voltam ao prompt', { timeout: 
   await waitFor(printed, 300)
   const printEntry = printed().entry
   assert.equal(printEntry.sides.with.print.url, 'http://127.0.0.1:5173/')
-  const image = await fetch(url + '/history-print/' + printEntry.id + '/with.png')
+  const image = await fetch(url + '/history-print/' + printEntry.id + '/with.png?v=' + encodeURIComponent(printEntry.sides.with.print.capturedAt))
   assert.equal(image.headers.get('content-type'), 'image/png')
   assert.match(Buffer.from(await image.arrayBuffer()).toString('latin1'), /PNG[\s\S]*127\.0\.0\.1:5173/)
   assert.equal((await fetch(url + '/history-print/not-an-id/with.png')).status, 404)

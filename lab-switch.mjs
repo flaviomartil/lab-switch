@@ -440,7 +440,7 @@ const server = createServer(async (request, response) => {
     response.writeHead(403).end()
     return
   }
-  const printRoute = request.method === 'GET' && request.url.match(/^\/history-print\/([0-9a-f-]{36})\/(with|without)\.png(?:\?[\w=.-]*)?$/)
+  const printRoute = request.method === 'GET' && request.url.split('?')[0].match(/^\/history-print\/([0-9a-f-]{36})\/(with|without)\.png$/)
   if (printRoute) {
     const path = history.printPath(printRoute[1], printRoute[2])
     try {
